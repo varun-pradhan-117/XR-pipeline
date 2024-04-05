@@ -1,3 +1,20 @@
 
 Version2.zip
 /Version2
+/UnifiedEvaluationFramework
+*.csv
+*.npy
+/David_MMSys_18/original_dataset_xyz
+/David_MMSys_18/sampled_dataset
+/Fan_NOSSDAV_17/sampled_dataset
+head-motion-prediction-master.zip
+/Li_ChinaCom_18/sampled_dataset
+/Nguyen_MM_18/sampled_dataset
+/Xu_CVPR_18/dataset/Gaze_txt_files
+/Xu_CVPR_18/sampled_dataset
+/Xu_CVPR_18/sampled_dataset_replica
+Xu_PAMI_18/__pycache__/Read_Dataset.cpython-36.pyc
+
+/Xu_PAMI_18/dataset/data
+/Xu_PAMI_18/sampled_by_frame_dataset
+/Xu_PAMI_18/sampled_dataset
