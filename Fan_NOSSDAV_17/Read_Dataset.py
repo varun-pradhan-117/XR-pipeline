@@ -428,11 +428,13 @@ def post_filter(_img):
     result[-3:, -3:] = _img.min()
     return result
 
+
 def create_saliency_maps():
     folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)
+    
     folder_mot_vec = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_MOT)
-    videos = [d.split('_')[0] for d in os.listdir(folder_sal_map) if os.path.isdir(os.path.join(folder_sal_map, d))]
-
+    videos = [d.split('_')[0] for d in os.listdir(folder_sal_map) if os.path.isfile(os.path.join(folder_sal_map, d))]
+    print(videos)
     for video in videos:
         sal_per_vid = {}
         video_sal_folder = os.path.join(OUTPUT_SALIENCY_FOLDER, video)
@@ -455,10 +457,10 @@ def create_saliency_maps():
             frame_id = image_name.split('.')[0].split('_')[-1]
             sal_per_vid[frame_id] = salient
             output_file = os.path.join(video_sal_folder, image_name)
-
+            
             print('saved image %s' % (output_file))
             cv2.imwrite(output_file, salient)
-
+        
         pickle.dump(sal_per_vid, open(os.path.join(video_sal_folder, video), 'wb'))
 
 # From NOSSDAV_17:
@@ -563,6 +565,10 @@ def split_traces_and_store():
     train_traces, test_traces = get_traces_for_train_and_test()
     store_dict_as_csv('Fan_NOSSDAV_17/train_set', ['user', 'video'], train_traces)
     store_dict_as_csv('Fan_NOSSDAV_17/test_set', ['user', 'video'], test_traces)
+
+def convert_videos_to_jpg():
+    pass
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process the input parameters to parse the dataset.')

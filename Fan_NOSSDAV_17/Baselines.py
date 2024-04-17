@@ -11,11 +11,11 @@ from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import csv
 import pickle
-from SampledDataset import get_video_ids, get_user_ids, load_saliency
+#from SampledDataset import get_video_ids, get_user_ids, load_saliency
 from sklearn.metrics import accuracy_score, f1_score, label_ranking_loss
-from position_only_baseline import create_pos_only_model
-from TRACK_model import create_TRACK_model
-from CVPR18_model import create_CVPR18_model
+#from position_only_baseline import create_pos_only_model
+#from TRACK_model import create_TRACK_model
+#from CVPR18_model import create_CVPR18_model
 import argparse
 
 parser = argparse.ArgumentParser(description='Process the input parameters to evaluate the network.')

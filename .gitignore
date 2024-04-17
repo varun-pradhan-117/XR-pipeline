@@ -18,3 +18,7 @@ Xu_PAMI_18/__pycache__/Read_Dataset.cpython-36.pyc
 /Xu_PAMI_18/dataset/data
 /Xu_PAMI_18/sampled_by_frame_dataset
 /Xu_PAMI_18/sampled_dataset
+*.pyc
+*.mp4
+/StagedData
+*.xml
