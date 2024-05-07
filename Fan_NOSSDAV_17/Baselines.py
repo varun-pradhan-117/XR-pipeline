@@ -11,19 +11,19 @@ from mpl_toolkits.mplot3d import Axes3D
 import cv2
 import csv
 import pickle
-#from SampledDataset import get_video_ids, get_user_ids, load_saliency
+from SampledDataset import get_video_ids, get_user_ids, load_saliency
 from sklearn.metrics import accuracy_score, f1_score, label_ranking_loss
 #from position_only_baseline import create_pos_only_model
 #from TRACK_model import create_TRACK_model
 #from CVPR18_model import create_CVPR18_model
 import argparse
 
-parser = argparse.ArgumentParser(description='Process the input parameters to evaluate the network.')
+#parser = argparse.ArgumentParser(description='Process the input parameters to evaluate the network.')
 
-parser.add_argument('-gpu_id', action='store', dest='gpu_id', help='The gpu used to train this network.')
-parser.add_argument('-model_name', action='store', dest='model_name', help='The name of the model used to reference the network structure used.')
+#parser.add_argument('-gpu_id', action='store', dest='gpu_id', help='The gpu used to train this network.')
+#parser.add_argument('-model_name', action='store', dest='model_name', help='The name of the model used to reference the network structure used.')
 
-args = parser.parse_args()
+#args = parser.parse_args()
 
 ROOT_FOLDER = './Fan_NOSSDAV_17'
 SAMPLED_DATASET_FOLDER = './Fan_NOSSDAV_17/sampled_dataset'
@@ -32,8 +32,8 @@ OUR_TILE_PROB_FOLDER = './Fan_NOSSDAV_17/dataset/sensory/tile_replica'
 DATASET_ROOT_FOLDER = os.path.join(ROOT_FOLDER, 'dataset')
 SALIENCY_FOLDER = os.path.join(ROOT_FOLDER, 'extract_saliency', 'saliency')
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
+#os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+#os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu_id
 
 NUM_TILES_WIDTH_SAL = 384
 NUM_TILES_HEIGHT_SAL = 216
@@ -114,8 +114,10 @@ def get_original_dataset():
             positions = get_orientations_for_trace(file_path)
             frame_ids = get_frame_indices_for_trace(file_path)
             video_rate = 1.0 / get_frame_rate(video, hardcoded=True)
+            
             samples = []
             for pos, frame_id in zip(positions, frame_ids):
+                print(frame_id*video_rate)
                 samples.append({'sec': frame_id*video_rate, 'yaw': pos[0], 'pitch': pos[1]})
             dataset[user][video] = samples
     return dataset

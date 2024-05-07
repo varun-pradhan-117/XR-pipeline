@@ -428,6 +428,45 @@ def post_filter(_img):
     result[-3:, -3:] = _img.min()
     return result
 
+# Convert videos to jpg for processing
+def extract_frame(video_path,output_folder,fps=5,frame_width=960, frame_height=480):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    video=cv2.VideoCapture(video_path)
+    original_frame_rate=int(video.get(cv2.CAP_PROP_FPS))
+    original_frame_width=int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_frame_height=int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    frame_interval=original_frame_rate//fps
+    frame_count=0
+    op_index=1
+    while video.isOpened():
+        if frame_count % frame_interval==0:
+            ret,frame=video.read()
+            if not ret:
+                break
+            frame=cv2.resize(frame,(frame_width,frame_height))
+            output_file=f"{output_folder}/{op_index}.jpg"
+            cv2.imwrite(output_file,frame)
+            op_index+=1
+        frame_count+=1
+    video.release()
+    
+def convert_videos_to_jpg():
+    folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)
+    folder_mot_vec = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_MOT)
+    
+    videos = [d.split('_')[0] for d in os.listdir(folder_sal_map) if os.path.isfile(os.path.join(folder_sal_map, d))]
+    for video in videos:
+        sal_map_folder=os.path.join(folder_sal_map,f"{video}_saliency")
+        sal_map_file=os.path.join(folder_sal_map,f"{video}_saliency.mp4")
+        extract_frame(sal_map_file,sal_map_folder)
+        mot_vec_folder=os.path.join(folder_mot_vec,f"{video}_motion")
+        mot_vec_file=os.path.join(folder_mot_vec,f"{video}_motion.mp4")
+        extract_frame(mot_vec_file,mot_vec_folder)
+        print(f"Saved map for {video}")
+        
+        
+        
 
 def create_saliency_maps():
     folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)
@@ -445,8 +484,8 @@ def create_saliency_maps():
         for image_name in os.listdir(video_input_salmap_folder):
             file_dir_sal = os.path.join(video_input_salmap_folder, image_name)
             file_dir_mot = os.path.join(video_input_motvec_folder, image_name)
-            img_sal = cv2.imread(file_dir_sal, 0).astype(np.float)
-            img_mot = cv2.imread(file_dir_mot, 0).astype(np.float)
+            img_sal = cv2.imread(file_dir_sal, 0).astype(np.float64)
+            img_mot = cv2.imread(file_dir_mot, 0).astype(np.float64)
 
             salient = (np.array(img_mot)+np.array(img_sal))/512.0
 
@@ -566,9 +605,9 @@ def split_traces_and_store():
     store_dict_as_csv('Fan_NOSSDAV_17/train_set', ['user', 'video'], train_traces)
     store_dict_as_csv('Fan_NOSSDAV_17/test_set', ['user', 'video'], test_traces)
 
-def convert_videos_to_jpg():
-    pass
 
+def train_test_split():
+    pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process the input parameters to parse the dataset.')
@@ -580,9 +619,10 @@ if __name__ == "__main__":
     parser.add_argument('-compare_traces', action="store_true", dest='_compare_traces', help='Flag that tells if we want to compare the original traces with the sampled traces.')
     parser.add_argument('-plot_3d_traces', action="store_true", dest='_plot_3d_traces', help='Flag that tells if we want to plot the traces in the unit sphere.')
     parser.add_argument('-create_tile_replica', action="store_true", dest='_create_tile_replica', help='Flag that tells if we want to create the tile replica using our tile mapping function.')
-
+    parser.add_argument('-convert_videos',action="store_true",dest="_convert_video_to_jpg",help='Flag that tells if we want to conver the original videos into images')
     args = parser.parse_args()
 
+    print(get_traces_for_train_and_test())
     if args._split_traces_and_store:
         split_traces_and_store()
 
@@ -596,6 +636,9 @@ if __name__ == "__main__":
     if args._create_sampled_dataset:
         create_and_store_sampled_dataset()
 
+    if args._convert_video_to_jpg:
+        convert_videos_to_jpg()
+        
     if args._create_cb_saliency:
         create_saliency_maps()
 

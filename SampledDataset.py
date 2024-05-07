@@ -119,7 +119,7 @@ def partition_in_train_and_test_without_video_intersection(sampled_dataset_folde
 # partition['test'] the traces in test_traces
 # the sample consists on a structure of {'video':video_id, 'user':user_id, 'time-stamp':time-stamp_id}
 # In this case the samples in train and test may belong to the same user or (exclusive or) the same video
-def partition_in_train_and_test(sampled_dataset_folder, init_window, end_window, train_traces, test_traces):
+def partition_in_train_and_test(sampled_dataset_folder, init_window, end_window, train_traces, test_traces,user_test_traces=None,video_test_traces=None):
     partition = {}
     partition['train'] = []
     partition['test'] = []
@@ -139,6 +139,29 @@ def partition_in_train_and_test(sampled_dataset_folder, init_window, end_window,
         for tstap in range(init_window, trace_length - end_window):
             ID = {'video': video, 'user': user, 'time-stamp': tstap}
             partition['test'].append(ID)
+            
+    if user_test_traces is not None:
+        partition['user_test']=[]
+        for trace in user_test_traces:
+            user = str(trace[0])
+            video = trace[1]
+            # to get the length of the trace
+            trace_length = read_sampled_data_for_trace(sampled_dataset_folder, video, user).shape[0]
+            for tstap in range(init_window, trace_length - end_window):
+                ID = {'video': video, 'user': user, 'time-stamp': tstap}
+                partition['train'].append(ID)
+    
+    if video_test_traces is not None:
+        partition['video_test']=[]
+        for trace in video_test_traces:
+            user = str(trace[0])
+            video = trace[1]
+            # to get the length of the trace
+            trace_length = read_sampled_data_for_trace(sampled_dataset_folder, video, user).shape[0]
+            for tstap in range(init_window, trace_length - end_window):
+                ID = {'video': video, 'user': user, 'time-stamp': tstap}
+                partition['train'].append(ID)
+            
     return partition
 
 # load the saliency maps for a "video" normalized between -1 and 1
