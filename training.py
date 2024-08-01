@@ -94,7 +94,7 @@ if args.train_flag:
 if args.evaluate_flag:
     EVALUATE_MODEL = True
 
-root_dataset_folder = os.path.join('./', dataset_name)
+root_dataset_folder = os.path.join('D:/', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
 SAMPLED_DATASET_FOLDER=os.path.join(root_dataset_folder,'sampled_dataset')
 
