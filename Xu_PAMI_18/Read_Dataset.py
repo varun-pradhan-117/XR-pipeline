@@ -16,8 +16,10 @@ import argparse
 ROOT_FOLDER = './Xu_PAMI_18/dataset/'
 DATA_FILENAME = 'FULLdata_per_video_frame.mat'
 OUTPUT_FOLDER = './Xu_PAMI_18/sampled_dataset'
-
-OUTPUT_TRUE_SALIENCY_FOLDER = './Xu_PAMI_18/true_saliency'
+drive_folder='D:/PAMI18'
+VIDEO_FOLDER=os.path.join(drive_folder,'Videos')
+VIDEO_DATA_FOLDER=os.path.join(drive_folder,'video_data')
+OUTPUT_TRUE_SALIENCY_FOLDER = os.path.join(drive_folder,'true_saliency')
 NUM_TILES_WIDTH_TRUE_SAL = 256
 NUM_TILES_HEIGHT_TRUE_SAL = 256
 
@@ -368,6 +370,90 @@ def load_sampled_dataset():
             dataset[user][video] = data.values
     return dataset
 
+
+def store_frames(video_path,output_folder,fps=None,rescale=2):
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    #print(f"Saving video {os.path.basename(video_path).split('.')[0]}")
+    video=cv2.VideoCapture(os.path.join(video_path))
+    original_frame_rate=round(video.get(cv2.CAP_PROP_FPS))
+    #print(original_frame_rate)
+    is_div= original_frame_rate%fps==0
+    #vid_num=os.path.basename(video_path).split('.')[0]
+    #trajectory_folder=os.path.join("D:/CVPR18/sampled_dataset",vid_num)
+    #files = os.listdir(trajectory_folder)
+    #first_file = os.path.join(trajectory_folder, files[0])
+    #data = pd.read_csv(first_file, header=None) 
+    #print(len(data))
+    
+    #print(is_div)
+    original_frame_width=int(video.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_frame_height=int(video.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    #print(original_frame_height,original_frame_width)
+    frame_duration=1/original_frame_rate
+    #desired_timestamps = np.arange(0, int(video.get(cv2.CAP_PROP_FRAME_COUNT)) /original_frame_rate, 0.2)
+    #print(desired_timestamps[-1]
+    if fps:
+        frame_interval=original_frame_rate//fps
+    else:
+        frame_interval=1
+    frame_count=0
+    last_frame=int(video.get(cv2.CAP_PROP_FRAME_COUNT))
+    #print(frame_duration*last_frame)
+    timestamps=[]
+    frames=[]
+    while video.isOpened():
+        ret,frame=video.read()
+        if not ret:
+            break
+        if is_div:
+            if frame_count%frame_interval==0 or frame_count+1==last_frame:
+                frame=cv2.resize(frame,(original_frame_width//rescale,original_frame_height//rescale))
+                frames.append(frame)
+                timestamps.append(frame_count*frame_duration)
+            #print((frame_count)*frame_duration)
+        else:
+            frame=cv2.resize(frame,(original_frame_width//rescale,original_frame_height//rescale))
+            frames.append(frame)
+            timestamps.append(frame_count*frame_duration)
+        frame_count+=1
+    #print(frame_count)
+    if not is_div:
+        sampled_frames=[]
+        sampled_timestamps=[]
+        desired_timestamps=list(np.arange(0,round(timestamps[-1])+0.1,1/fps))
+        for ts in desired_timestamps:
+            closest_idx=np.abs(timestamps-ts).argmin()
+            sampled_frames.append(frames[closest_idx])
+            sampled_timestamps.append(timestamps[closest_idx])
+        timestamps=sampled_timestamps
+        frames=sampled_frames
+    #print(len(timestamps))
+    #if len(data)!=len(timestamps):
+    #    print(vid_num)
+    #print(desired_timestamps)
+    video.release()
+    frames=np.array(frames)
+    timestamps=np.array(timestamps)
+    #for i,frame in enumerate(frames):
+        #np.save(f'{output_folder}/{i}.npy',frame)
+    np.save(f'{output_folder}/sampled_video.npy',frames)
+    np.save(f'{output_folder}/timestamps.npy',timestamps)
+
+
+def convert_videos():
+    videos=os.listdir(VIDEO_FOLDER)
+    videos=[vid for vid in videos if vid.endswith('.mp4')]
+    output_dir=os.path.join(drive_folder,"5fps_Video_Images")
+    for video in videos:
+        
+        vid_path=os.path.join(VIDEO_FOLDER,video)
+        vid_name=video.split('.')[0]
+        print(f'Storing {vid_name}')
+        output_folder=os.path.join(output_dir,vid_name)
+        store_frames(vid_path,output_folder,5)
+        
+    
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process the input parameters to parse the dataset.')
     parser.add_argument('-creat_samp_dat', action="store_true", dest='_create_sampled_dataset', help='Flag that tells if we want to create and store the sampled dataset.')
@@ -375,9 +461,12 @@ if __name__ == "__main__":
     parser.add_argument('-compare_traces', action="store_true", dest='_compare_traces', help='Flag that tells if we want to compare the original traces with the sampled traces.')
     parser.add_argument('-plot_3d_traces', action="store_true", dest='_plot_3d_traces', help='Flag that tells if we want to plot the traces in the unit sphere.')
     parser.add_argument('-analyze_data', action="store_true", dest='_analyze_orig_data', help='Flag that tells if we want to verify if the tile probability is correctly computed.')
-
+    parser.add_argument('-convert_videos',action="store_true",dest="_convert_video_to_jpg",help='Flag that tells if we want to conver the original videos into images')
     args = parser.parse_args()
 
+
+    if args._convert_video_to_jpg:
+        convert_videos()
     #print('Use this file to create sampled dataset')
     # Create sampled dataset
     if args._create_sampled_dataset:

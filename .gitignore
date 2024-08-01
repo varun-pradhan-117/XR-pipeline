@@ -24,3 +24,6 @@ Xu_PAMI_18/__pycache__/Read_Dataset.cpython-36.pyc
 *.xml
 /Fan_NOSSDAV_17/dataset
 /Fan_NOSSDAV_17/extract_saliency
+/Plots
+/SavedModels
+/Scratch

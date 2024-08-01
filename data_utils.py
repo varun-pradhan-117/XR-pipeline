@@ -24,11 +24,10 @@ def fan_nossdav_split(user_ratio=0.6, video_ratio=0.6):
     test_users = list_of_users[num_train_users:]
     train_videos = list_of_videos[:num_train_videos]
     test_videos = list_of_videos[num_train_videos:]
-    
     # Randomly select users and videos for the special cases
     # where either the user or video is new in the test set
-    special_test_users = random.sample(train_users, len(test_users))
-    special_test_videos = random.sample(train_videos, len(test_videos))
+    special_test_users = test_users
+    special_test_videos = test_videos
     
     new_user_new_video=[[user,video] for user in test_users for video in test_videos]
     old_user_new_video=[[random.choice(train_users),video] for video in special_test_videos]
@@ -48,7 +47,11 @@ def transform_normalized_eulerian_to_cartesian(positions):
     eulerian_samples = [eulerian_to_cartesian(pos[0], pos[1]) for pos in positions]
     return np.array(eulerian_samples)
 
-    
+def reshape_ip(input):
+    input=[ip.squeeze(dim=1) for ip in input]
+    return input
+
+
 class PositionDataset(Dataset):
     def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None):
         self.list_IDs=list_IDs
@@ -75,8 +78,8 @@ class PositionDataset(Dataset):
         decoder_outputs_for_batch = []
         
         if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18']:
-            encoder_sal_inputs_for_batch.append(torch.unsqueeze(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1], dim=-1))
-            decoder_sal_inputs_for_batch.append(torch.unsqueeze(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1], dim=-1))
+            encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
+            decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp+1:tstamp+1+1])
@@ -94,13 +97,20 @@ class PositionDataset(Dataset):
         decoder_sal_inputs_for_batch=np.array(decoder_sal_inputs_for_batch)
         decoder_outputs_for_batch=np.array(decoder_outputs_for_batch)
         if self.model_name == 'TRACK' or self.model_name == 'TRACK_AblatSal' or self.model_name == 'TRACK_AblatFuse':
-            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), torch.tensor(encoder_sal_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(encoder_sal_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name == 'CVPR18':
-            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name == 'pos_only':
-            return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_pos_inputs_for_batch),dtype=torch.float32)], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)
+            return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), 
+                    torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_pos_inputs_for_batch),dtype=torch.float32)], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)
         elif self.model_name == 'pos_only_3d_loss':
-            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
+                    torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name == 'CVPR18_orig':
             return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)[:, 0, :, :, 0]], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)[:, 0]
         elif self.model_name == 'MM18':

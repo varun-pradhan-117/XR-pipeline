@@ -4,7 +4,7 @@ import torch.optim as optim
 import numpy as np
 from torchinfo import summary
 
-def MetricOrthLoss(true_position, pred_position):
+def MetricOrthLoss(pred_position, true_position):
     yaw_true = (true_position[:, :, 0:1] - 0.5) * 2*np.pi
     pitch_true = (true_position[:, :, 1:2] - 0.5) * np.pi
     # Transform it to range -pi, pi for yaw and -pi/2, pi/2 for pitch
@@ -32,7 +32,7 @@ def to_position(inputs,outputs_delta,outputs_delta_dir):
     yaw_pred = torch.fmod(cond_above * (yaw_pred_wo_corr - 0.5) + cond_correct * yaw_pred_wo_corr + cond_below * (yaw_pred_wo_corr - 0.5), 1.0)
     return torch.cat([yaw_pred, pitch_pred], -1)
 
-class seq2seq(nn.Module):
+class TRACK_POS(nn.Module):
     def __init__(self,M_WINDOW,H_WINDOW,input_size=2,hidden_size=1024):
         super().__init__()
         self.lstm_layer=nn.LSTM(input_size,hidden_size=hidden_size,batch_first=True)
@@ -55,11 +55,22 @@ class seq2seq(nn.Module):
             #print(inputs.shape)
         
         return torch.cat(all_outputs,dim=1)
-    
-def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion=MetricOrthLoss,epochs=100):
+
+def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2):
+    model=TRACK_POS(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size)
+    optimizer=optim.AdamW(model.parameters(),lr=0.0005)
+    criterion=MetricOrthLoss
+    return model,optimizer,criterion
+
+def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion=MetricOrthLoss,epochs=100,device="cpu", path=None):
+    best_val_loss=float('inf')
+    device=torch.device(device)
+    model.to(device)
     if optimizer==None:
         optimizer=optim.Adam(model.parameters(),lr=0.0005)
     losses=[]
+    val_losses=[]
+    last_saved=0
     for epoch in range(epochs):
         model.train()
         epoch_losses=[]
@@ -67,11 +78,12 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
         for ip,targets in train_loader:
             optimizer.zero_grad()
             encoder_inputs,decoder_inputs=ip
-            encoder_inputs=encoder_inputs.squeeze()
-            decoder_inputs=decoder_inputs.squeeze(axis=1)
+            encoder_inputs=encoder_inputs.squeeze().to(device)
+            decoder_inputs=decoder_inputs.squeeze(axis=1).to(device)
+            targets=targets.squeeze(axis=1)
             #print(encoder_inputs)
             prediction=model(encoder_inputs,decoder_inputs)
-            loss=criterion(prediction,targets)
+            loss=criterion(prediction,targets.to(device))
             loss.backward()
             optimizer.step()
             #print("-------")
@@ -80,12 +92,41 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
             epoch_losses.append(loss.item())
         epoch_loss=sum(epoch_losses)/len(epoch_losses)
         losses.append(epoch_loss)
-        print(f"Epoch {epoch+1}/{epochs}, Loss:{epoch_loss}")
-    return losses
+        print(f"Epoch {epoch+1}/{epochs}, Train Loss:{epoch_loss}")
+        
+        model.eval()
+        epoch_val_losses=[]
+        for ip,targets in validation_loader:
+            encoder_inputs,decoder_inputs=ip
+            encoder_inputs=encoder_inputs.squeeze().to(device)
+            decoder_inputs=decoder_inputs.squeeze(axis=1).to(device)
+            targets=targets.squeeze(axis=1)
+            #print(encoder_inputs)
+            prediction=model(encoder_inputs,decoder_inputs)
+            loss=criterion(prediction,targets.to(device))
+            #print("-------")
+            #print(model.state_dict())
+            #return 0
+            epoch_val_losses.append(loss.item())
+        epoch_val_loss=sum(epoch_val_losses)/len(epoch_val_losses)
+        val_losses.append(epoch_val_loss)
+        
+        print(f"Epoch {epoch+1}/{epochs}, Train Loss:{epoch_loss:.4f}, Validation Loss:{epoch_val_loss:.4f}")
+        last_saved+=1
+        if epoch_val_loss<best_val_loss:
+            best_val_loss=epoch_val_loss
+            last_saved=0
+            checkpoint={
+                'model_state_dict':model.state_dict(),
+                'optimizer_state':optimizer.state_dict(),
+                'losses':losses,
+                'val_losses':val_losses,
+                'epoch':'epoch'
+            }
+            torch.save(checkpoint,path)
+            print(f"Model saved at {epoch+1} with validation loss: {epoch_val_loss:.4f}")
+        if last_saved>20:
+            break
+    return losses, val_losses
     
     
-def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2):
-    model=seq2seq(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size)
-    optimizer=optim.Adam(model.parameters(),lr=0.0005)
-    criterion=MetricOrthLoss
-    return model,optimizer,criterion

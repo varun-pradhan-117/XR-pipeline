@@ -149,7 +149,7 @@ def partition_in_train_and_test(sampled_dataset_folder, init_window, end_window,
             trace_length = read_sampled_data_for_trace(sampled_dataset_folder, video, user).shape[0]
             for tstap in range(init_window, trace_length - end_window):
                 ID = {'video': video, 'user': user, 'time-stamp': tstap}
-                partition['train'].append(ID)
+                partition['user_test'].append(ID)
     
     if video_test_traces is not None:
         partition['video_test']=[]
@@ -160,7 +160,7 @@ def partition_in_train_and_test(sampled_dataset_folder, init_window, end_window,
             trace_length = read_sampled_data_for_trace(sampled_dataset_folder, video, user).shape[0]
             for tstap in range(init_window, trace_length - end_window):
                 ID = {'video': video, 'user': user, 'time-stamp': tstap}
-                partition['train'].append(ID)
+                partition['video_test'].append(ID)
             
     return partition
 
@@ -175,7 +175,7 @@ def load_saliency(saliency_folder, video):
         u.encoding = 'latin1'
         p = u.load()
         for frame_id in range(1, len(p.keys())+1):
-            salmap = p['%03d' % frame_id]
+            salmap = p[f'{frame_id}']
             salmap_norm = mmscaler.fit_transform(salmap.ravel().reshape(-1, 1)).reshape(salmap.shape)
             saliency_list.append(salmap_norm)
     return np.array(saliency_list)

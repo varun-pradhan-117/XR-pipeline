@@ -17,7 +17,9 @@ from mpl_toolkits.mplot3d import Axes3D
 ROOT_FOLDER = './Nguyen_MM_18/dataset/'
 OUTPUT_FOLDER = './Nguyen_MM_18/sampled_dataset'
 OUTPUT_SALIENCY_FOLDER = './Nguyen_MM_18/extract_saliency/saliency'
-OUTPUT_TRUE_SALIENCY_FOLDER = './Nguyen_MM_18/true_saliency'
+drive_folder='D:/MM_18'
+VIDEO_DATA_FOLDER=os.path.join(drive_folder,'video_data')
+OUTPUT_TRUE_SALIENCY_FOLDER = os.path.join(drive_folder,'true_saliency')
 
 NUM_TILES_WIDTH_TRUE_SAL = 256
 NUM_TILES_HEIGHT_TRUE_SAL = 256

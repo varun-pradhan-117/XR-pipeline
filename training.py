@@ -9,11 +9,18 @@ import argparse
 
 
 from SampledDataset import read_sampled_positions_for_trace, load_saliency, load_true_saliency, get_video_ids, get_user_ids, get_users_per_video, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection, partition_in_train_and_test
-from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics
+from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset
-import TRACK_POS
+import TRACK_POS, TRACK_SAL
 
+if torch.cuda.is_available():
+    device=torch.device("cuda")
+    print("Using GPU")
+else:
+    device=torch.device("cpu")
+    print("Using CPU")
 
+np.random.seed(19680801)
 parser = argparse.ArgumentParser(description='Process the input parameters to train the network.')
 
 parser.add_argument('-train', action="store_true", dest='train_flag', help='Flag that tells if we will run the training procedure.')
@@ -72,11 +79,20 @@ else:
 
 # Fixed parameters
 EPOCHS=500
-NUM_TILES_WIDTH=384
-NUM_TILES_HEIGHT=216
+NUM_TILES_WIDTH=480
+NUM_TILES_HEIGHT=240
 NUM_TILES_WIDTH_TRUE_SAL = 256
 NUM_TILES_HEIGHT_TRUE_SAL = 256
 RATE = 0.2
+PERC_VIDEOS_TRAIN = 0.6
+PERC_USERS_TRAIN = 0.6
+BATCH_SIZE = 128
+TRAIN_MODEL = False
+EVALUATE_MODEL = False
+if args.train_flag:
+    TRAIN_MODEL = True
+if args.evaluate_flag:
+    EVALUATE_MODEL = True
 
 root_dataset_folder = os.path.join('./', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
@@ -107,6 +123,9 @@ if model_name == 'TRACK':
     else:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Results_EncDec_3DCoords_ContSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Models_EncDec_3DCoords_ContSal' + EXP_NAME)
+        model,optimizer,criterion=TRACK_SAL.create_sal_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
+                                                             NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
+                                                             NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -131,6 +150,7 @@ elif model_name == 'CVPR18':
 elif model_name == 'pos_only':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Models_EncDec_eulerian' + EXP_NAME)
+    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW)
 elif model_name == 'pos_only_3d_loss':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Models_EncDec_eulerian' + EXP_NAME)
@@ -146,62 +166,78 @@ elif model_name == 'MM18':
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'MM18/Results_Seq2One_2DNormalized_TrueSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'MM18/Models_Seq2One_2DNormalized_TrueSal' + EXP_NAME)
 
-# Create model
-model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW)
+
 #print(model)
 #summary(model,input_size=(128,1,5,2))
-#sys.exit()
+if __name__=='__main__':
+
+    videos = get_video_ids(SAMPLED_DATASET_FOLDER)
+    users = get_user_ids(SAMPLED_DATASET_FOLDER)
+    users_per_video = get_users_per_video(SAMPLED_DATASET_FOLDER)
+
+    if dataset_name=="Fan_NOSSDAV_17":
+        split_path=os.path.join(dataset_name,"splits")
+        if os.path.exists(os.path.join(split_path,'train_set')):
+            train_traces=load_dict_from_csv(os.path.join(split_path,'train_set'),columns=['user','video'])
+            test_traces=load_dict_from_csv(os.path.join(split_path,'test_set'),columns=['user','video'])
+            user_test_traces=load_dict_from_csv(os.path.join(split_path,'user_test_set'),columns=['user','video'])
+            video_test_traces=load_dict_from_csv(os.path.join(split_path,'video_test_set'),columns=['user','video'])
+        else:
+            train_traces,test_traces,video_test_traces,user_test_traces=fan_nossdav_split(video_ratio=PERC_VIDEOS_TRAIN,user_ratio=PERC_USERS_TRAIN)
+            store_list_as_csv(os.path.join(split_path,'train_set'),['user','video'],train_traces)
+            store_list_as_csv(os.path.join(split_path,'test_set'),['user','video'],test_traces)
+            store_list_as_csv(os.path.join(split_path,'user_test_set'),['user','video'],user_test_traces)
+            store_list_as_csv(os.path.join(split_path,'video_test_set'),['user','video'],video_test_traces)
+        partitions=partition_in_train_and_test(SAMPLED_DATASET_FOLDER,INIT_WINDOW,END_WINDOW,train_traces,test_traces,user_test_traces=user_test_traces,video_test_traces=video_test_traces)
+
+    #print(train_traces.shape)
+    #print(test_traces.shape)
+    #print(partitions)
+
+    # Dictionary that stores the traces per video and user
+    all_traces = {}
+    for video in videos:
+        all_traces[video] = {}
+        for user in users_per_video[video]:
+            all_traces[video][user] = read_sampled_positions_for_trace(SAMPLED_DATASET_FOLDER, str(video), str(user))
+
+    #print(users_per_video[videos[0]])        
+    #print(all_traces[videos[0]][users_per_video[videos[0]][0]])
+    #print(all_traces['coaster']['user21'].shape)
+    #sys.exit()
 
 
-PERC_VIDEOS_TRAIN = 0.6
-PERC_USERS_TRAIN = 0.6
-BATCH_SIZE = 128
-TRAIN_MODEL = False
-EVALUATE_MODEL = False
-if args.train_flag:
-    TRAIN_MODEL = True
-if args.evaluate_flag:
-    EVALUATE_MODEL = True
-    
-    
+    all_saliencies = {}
+    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency']:
+        for video in videos:
+            print(f"Loading {video} saliencies")
+            all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
 
-videos = get_video_ids(SAMPLED_DATASET_FOLDER)
-users = get_user_ids(SAMPLED_DATASET_FOLDER)
-users_per_video = get_users_per_video(SAMPLED_DATASET_FOLDER)
 
-if dataset_name=="Fan_NOSSDAV_17":
-    train_traces,test_traces,video_test_traces,user_test_traces=fan_nossdav_split(video_ratio=PERC_VIDEOS_TRAIN,user_ratio=PERC_USERS_TRAIN)
-    partitions=partition_in_train_and_test(SAMPLED_DATASET_FOLDER,INIT_WINDOW,END_WINDOW,train_traces,test_traces,user_test_traces=user_test_traces,video_test_traces=video_test_traces)
+    train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+    train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
+    test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+    test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
 
-#print(train_traces.shape)
-#print(test_traces.shape)
+    if model_name == 'pos_only':
+        criterion = OrthDist()
+    elif model_name == 'TRACK':
+        metrics = {"orth_dist": MetricOrthLoss}
 
-# Dictionary that stores the traces per video and user
-all_traces = {}
-for video in videos:
-    all_traces[video] = {}
-    for user in users_per_video[video]:
-        all_traces[video][user] = read_sampled_positions_for_trace(SAMPLED_DATASET_FOLDER, str(video), str(user))
-
-#print(users_per_video[videos[0]])        
-#print(all_traces[videos[0]][users_per_video[videos[0]][0]])
-
-for ID in partitions["train"]:
-    user=ID['user']
-    video=ID['video']
-    tstamp=ID['time-stamp']
-    #print(user,video,tstamp)
-    break
-
-train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name)
-train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True)
-test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name)
-test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False)
-#print(len(train_loader))
-#print(test_data[0])
-EPOCHS=1
-if model_name=='pos_only':
-    losses=TRACK_POS.train_pos_only(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS)
-    #print(model.state_dict())
-    print("Final Loss:",losses[-1])
-    
+    EPOCHS=500
+    model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+    print(model_save_path)
+    #torch.autograd.set_detect_anomaly(True)
+    if model_name=='pos_only':
+        losses, val_losses=TRACK_POS.train_pos_only(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS, device=device,path=model_save_path)
+        #print(model.state_dict())
+        print(f"Final Loss:{losses[-1]:.4f}")
+        if not os.path.exists(os.path.join('Losses',dataset_name)):
+            os.makedirs(os.path.join('LOsses',dataset_name))
+        torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
+    elif model_name=='TRACK':
+        losses,val_losses=TRACK_SAL.train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path)
+        print(f"Final Loss:{losses[-1]:.4f}")
+        if not os.path.exists(os.path.join('Losses',dataset_name)):
+            os.makedirs(os.path.join('LOsses',dataset_name))
+        torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))

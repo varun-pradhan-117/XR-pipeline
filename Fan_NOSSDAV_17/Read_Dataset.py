@@ -26,7 +26,8 @@ OUTPUT_TRUE_SALIENCY_FOLDER = './Fan_NOSSDAV_17/true_saliency'
 
 NUM_TILES_WIDTH_TRUE_SAL = 256
 NUM_TILES_HEIGHT_TRUE_SAL = 256
-
+IMAGE_HEIGHT = 240
+IMAGE_WIDTH = 480
 SAMPLING_RATE = 0.2
 # From https://people.cs.nctu.edu.tw/~chuang/pubs/pdf/2017mmsys.pdf 360° Video Viewing Dataset:
 # We divide each frame, which is mapped in equirectangular model, into 192x192 tiles, so there are *200* tiles in total.
@@ -429,7 +430,7 @@ def post_filter(_img):
     return result
 
 # Convert videos to jpg for processing
-def extract_frame(video_path,output_folder,fps=5,frame_width=960, frame_height=480):
+def extract_frame(video_path,output_folder,fps=5,frame_width=IMAGE_WIDTH, frame_height=IMAGE_HEIGHT):
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
     video=cv2.VideoCapture(video_path)
@@ -439,11 +440,12 @@ def extract_frame(video_path,output_folder,fps=5,frame_width=960, frame_height=4
     frame_interval=original_frame_rate//fps
     frame_count=0
     op_index=1
+    last_frame=int(video.get(cv2.CAP_PROP_FRAME_COUNT))
     while video.isOpened():
-        if frame_count % frame_interval==0:
-            ret,frame=video.read()
-            if not ret:
-                break
+        ret,frame=video.read()
+        if not ret:
+            break
+        if frame_count % frame_interval==0 or frame_count+1==last_frame:            
             frame=cv2.resize(frame,(frame_width,frame_height))
             output_file=f"{output_folder}/{op_index}.jpg"
             cv2.imwrite(output_file,frame)
@@ -451,7 +453,7 @@ def extract_frame(video_path,output_folder,fps=5,frame_width=960, frame_height=4
         frame_count+=1
     video.release()
     
-def convert_videos_to_jpg():
+def convert_maps_to_jpg():
     folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)
     folder_mot_vec = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_MOT)
     
@@ -469,8 +471,7 @@ def convert_videos_to_jpg():
         
 
 def create_saliency_maps():
-    folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)
-    
+    folder_sal_map = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_SAL)    
     folder_mot_vec = os.path.join(ROOT_FOLDER, FOLDER_IMAGES_MOT)
     videos = [d.split('_')[0] for d in os.listdir(folder_sal_map) if os.path.isfile(os.path.join(folder_sal_map, d))]
     print(videos)
@@ -619,10 +620,10 @@ if __name__ == "__main__":
     parser.add_argument('-compare_traces', action="store_true", dest='_compare_traces', help='Flag that tells if we want to compare the original traces with the sampled traces.')
     parser.add_argument('-plot_3d_traces', action="store_true", dest='_plot_3d_traces', help='Flag that tells if we want to plot the traces in the unit sphere.')
     parser.add_argument('-create_tile_replica', action="store_true", dest='_create_tile_replica', help='Flag that tells if we want to create the tile replica using our tile mapping function.')
-    parser.add_argument('-convert_videos',action="store_true",dest="_convert_video_to_jpg",help='Flag that tells if we want to conver the original videos into images')
+    parser.add_argument('-convert_maps',action="store_true",dest="_convert_maps_to_jpg",help='Flag that tells if we want to conver the original videos into images')
     args = parser.parse_args()
 
-    print(get_traces_for_train_and_test())
+    #print(get_traces_for_train_and_test())
     if args._split_traces_and_store:
         split_traces_and_store()
 
@@ -636,8 +637,8 @@ if __name__ == "__main__":
     if args._create_sampled_dataset:
         create_and_store_sampled_dataset()
 
-    if args._convert_video_to_jpg:
-        convert_videos_to_jpg()
+    if args._convert_maps_to_jpg:
+        convert_maps_to_jpg()
         
     if args._create_cb_saliency:
         create_saliency_maps()

@@ -7,6 +7,8 @@ from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 import csv
 import pandas as pd
+import torch.nn as nn
+import torch
 
 # The (input) corresponds to (x, y, z) of a unit sphere centered at the origin (0, 0, 0)
 # Returns the values (theta, phi) with:
@@ -156,18 +158,46 @@ def interpolate_quaternions(orig_times, quaternions, rate, time_orig_at_zero=Tru
     interp_rots = slerp(times)
     return np.concatenate((times[:, np.newaxis], interp_rots.as_quat()), axis=1)
 
-# Compute the orthodromic distance between two points in 3d coordinates
-def compute_orthodromic_distance(true_position, pred_position):
-    norm_a = np.sqrt(np.square(true_position[0]) + np.square(true_position[1]) + np.square(true_position[2]))
-    norm_b = np.sqrt(np.square(pred_position[0]) + np.square(pred_position[1]) + np.square(pred_position[2]))
-    x_true = true_position[0] / norm_a
-    y_true = true_position[1] / norm_a
-    z_true = true_position[2] / norm_a
-    x_pred = pred_position[0] / norm_b
-    y_pred = pred_position[1] / norm_b
-    z_pred = pred_position[2] / norm_b
-    great_circle_distance = np.arccos(np.maximum(np.minimum(x_true * x_pred + y_true * y_pred + z_true * z_pred, 1.0), -1.0))
-    return great_circle_distance
+def MetricOrthLoss(position_a, position_b,epsilon=1e-8):
+    # Transform into directional vector in Cartesian Coordinate System
+    # Transform into directional vector in Cartesian Coordinate System
+    norm_a = torch.sqrt(torch.square(position_a[..., 0:1]) + torch.square(position_a[..., 1:2])
+                        + torch.square(position_a[..., 2:3]))+epsilon
+    norm_b = torch.sqrt(torch.square(position_b[..., 0:1]) + torch.square(position_b[..., 1:2])
+                        + torch.square(position_b[..., 2:3]))+epsilon
+    x_true = position_a[..., 0:1] / norm_a
+    y_true = position_a[..., 1:2] / norm_a
+    z_true = position_a[..., 2:3] / norm_a
+    x_pred = position_b[..., 0:1] / norm_b
+    y_pred = position_b[..., 1:2] / norm_b
+    z_pred = position_b[..., 2:3] / norm_b
+    # Finally compute orthodromic distance
+    # great_circle_distance = np.arccos(x_true*x_pred+y_true*y_pred+z_true*z_pred)
+    # To keep the values in bound between -1 and 1
+    great_circle_distance = torch.acos(torch.clamp(x_true * x_pred + y_true * y_pred + z_true * z_pred, -1.0, 1.0))
+    return great_circle_distance.mean()
+
+
+class OrthDist(nn.Module):
+    def __init__(self):
+        super(OrthDist, self).__init__()
+
+    def forward(self, pred_position, true_position):
+        yaw_true = (true_position[:, :, 0:1] - 0.5) * 2 * np.pi
+        pitch_true = (true_position[:, :, 1:2] - 0.5) * np.pi
+        # Transform it to range -pi, pi for yaw and -pi/2, pi/2 for pitch
+        yaw_pred = (pred_position[:, :, 0:1] - 0.5) * 2 * np.pi
+        pitch_pred = (pred_position[:, :, 1:2] - 0.5) * np.pi
+        # Finally compute orthodromic distance
+        delta_long = torch.abs(torch.atan2(torch.sin(yaw_true - yaw_pred), torch.cos(yaw_true - yaw_pred)))
+        numerator = torch.sqrt(torch.pow(torch.cos(pitch_pred) * torch.sin(delta_long), 2.0) + torch.pow(
+            torch.cos(pitch_true) * torch.sin(pitch_pred) - torch.sin(pitch_true) * torch.cos(pitch_pred) * torch.cos(
+                delta_long), 2.0))
+        denominator = torch.sin(pitch_true) * torch.sin(pitch_pred) + torch.cos(pitch_true) * torch.cos(
+            pitch_pred) * torch.cos(delta_long)
+        great_circle_distance = torch.abs(torch.atan2(numerator, denominator))
+        return torch.mean(great_circle_distance)
+
 
 def compute_mse(true_position, pred_position):
     return mean_squared_error(true_position, pred_position)
@@ -201,6 +231,17 @@ def load_dict_from_csv(filename, columns, sep=',', header=0, engine='python'):
     data = dataframe[columns]
     return dataframe.values
 
+def store_list_as_csv(csv_file,csv_columns,list_data):
+    with open(csv_file,'w') as csvfile:
+        pass
+    try:
+        with open(csv_file,'w') as csvfile:
+            writer=csv.writer(csvfile)
+            writer.writerow(csv_columns)
+            writer.writerows(list_data)
+    except IOError:
+        print("I/O error")
+            
 all_metrics = {}
-all_metrics['orthodromic'] = compute_orthodromic_distance
+all_metrics['orthodromic'] = MetricOrthLoss
 all_metrics['mse'] = compute_mse
