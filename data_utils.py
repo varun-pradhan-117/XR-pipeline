@@ -4,10 +4,13 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics
-
+from sklearn.model_selection import train_test_split
+import pandas as pd
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 
 NOSSDAV_sample_folder="Fan_NOSSDAV_17/sampled_dataset"
-def fan_nossdav_split(user_ratio=0.6, video_ratio=0.6):
+def fan_nossdav_split(NOSSDAV_sample_folder,user_ratio=0.6, video_ratio=0.6):
     list_of_videos = [o for o in os.listdir(NOSSDAV_sample_folder) if not o.endswith('.gitkeep')]
     list_of_users=[o for o in os.listdir(os.path.join(NOSSDAV_sample_folder,list_of_videos[0]))]
     
