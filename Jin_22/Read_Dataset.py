@@ -248,7 +248,8 @@ def create_and_store_true_saliency(sampled_dataset):
 
     # Returns an array of size (NUM_TILES_HEIGHT_TRUE_SAL, NUM_TILES_WIDTH_TRUE_SAL) with values between 0 and 1 specifying the probability that a tile is watched by the user
     # We built this function to ensure the model and the groundtruth tile-probabilities are built with the same (or similar) function
-    def from_position_to_tile_probability_cartesian(pos):
+    def from_position_to_tile_probability_cartesian(user_data):
+        user_num = user_data.shape[0]
         yaw_grid, pitch_grid = np.meshgrid(np.linspace(0, 1, NUM_TILES_WIDTH_TRUE_SAL, endpoint=False),
                                            np.linspace(0, 1, NUM_TILES_HEIGHT_TRUE_SAL, endpoint=False))
         yaw_grid += 1.0 / (2.0 * NUM_TILES_WIDTH_TRUE_SAL)
@@ -256,26 +257,25 @@ def create_and_store_true_saliency(sampled_dataset):
         yaw_grid = yaw_grid * 2 * np.pi
         pitch_grid = pitch_grid * np.pi
         x_grid, y_grid, z_grid = eulerian_to_cartesian(theta=yaw_grid, phi=pitch_grid)
-        great_circle_distance = np.arccos(np.maximum(np.minimum(x_grid * pos[0] + y_grid * pos[1] + z_grid * pos[2], 1.0), -1.0))
+        x_grid = np.expand_dims(x_grid, axis=0)
+        y_grid = np.expand_dims(y_grid, axis=0)
+        z_grid = np.expand_dims(z_grid, axis=0)
+        x_pos = np.expand_dims(user_data[:, 0], axis=(1, 2))
+        y_pos = np.expand_dims(user_data[:, 1], axis=(1, 2))
+        z_pos = np.expand_dims(user_data[:, 2], axis=(1, 2))
+        dot_product = x_grid * x_pos + y_grid * y_pos + z_grid * z_pos
+        great_circle_distance = np.arccos(np.clip(dot_product, -1.0, 1.0))
         gaussian_orth = np.exp((-1.0 / (2.0 * np.square(0.1))) * np.square(great_circle_distance))
         return gaussian_orth
 
-    videos = get_video_ids(OUTPUT_FOLDER)
-    print()
+    videos = get_video_ids(sampled_dataset)
     for enum_video, video in enumerate(videos):
-        print('creating true saliency for video', video, '-', enum_video, '/', len(videos))
+        print('creating true saliency for video', video, '-', enum_video+1, '/', len(videos))
         real_saliency_for_video = []
-        video_data=np.load(os.path.join(sampled_dataset),video,f'{video}_unit_vectors.npy')
-        print(video_data.shape)
-        return
-        max_num_samples = get_max_num_samples_for_video(video, sampled_dataset)
-
+        video_data=np.load(os.path.join(sampled_dataset,video,f'{video}_unit_vectors.npy'))
+        max_num_samples=video_data.shape[1]
         for x_i in range(max_num_samples):
-            tileprobs_for_video_cartesian = []
-            for user in sampled_dataset.keys():
-                tileprobs_cartesian = from_position_to_tile_probability_cartesian(sampled_dataset[user][video][x_i, 1:])
-                tileprobs_for_video_cartesian.append(tileprobs_cartesian)
-            tileprobs_for_video_cartesian = np.array(tileprobs_for_video_cartesian)
+            tileprobs_for_video_cartesian=from_position_to_tile_probability_cartesian(video_data[:,x_i,:])
             real_saliency_cartesian = np.sum(tileprobs_for_video_cartesian, axis=0) / tileprobs_for_video_cartesian.shape[0]
             real_saliency_for_video.append(real_saliency_cartesian)
         real_saliency_for_video = np.array(real_saliency_for_video)

@@ -7,8 +7,8 @@ import os
 import sys
 import argparse
 
-from DatasetHelper import partition_in_train_and_test
-from SampledDataset import read_sampled_positions_for_trace, load_saliency, load_true_saliency, get_video_ids, get_user_ids, get_users_per_video, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
+from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
+from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users
 import TRACK_POS, TRACK_SAL
@@ -121,6 +121,9 @@ if model_name == 'TRACK':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Models_EncDec_3DCoords_TrueSal' + EXP_NAME)
+        model,optimizer,criterion=TRACK_SAL.create_sal_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
+                                                             NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
+                                                             NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
     else:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Results_EncDec_3DCoords_ContSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Models_EncDec_3DCoords_ContSal' + EXP_NAME)
@@ -172,13 +175,13 @@ elif model_name == 'MM18':
 #summary(model,input_size=(128,1,5,2))
 if __name__=='__main__':
 
-    videos = get_video_ids(SAMPLED_DATASET_FOLDER)
-    users = get_user_ids(SAMPLED_DATASET_FOLDER)
-    users_per_video = get_users_per_video(SAMPLED_DATASET_FOLDER)
+    videos = get_video_ids(VIDEO_DATA_FOLDER)
+    users = get_user_ids(VIDEO_DATA_FOLDER)
+    users_per_video = get_users_per_video(VIDEO_DATA_FOLDER)
 
-    if dataset_name=="Fan_NOSSDAV_17":
+    if dataset_name in ["Fan_NOSSDAV_17","Jin_22"]:
         split_path=os.path.join(dataset_name,"splits")
-        if False and os.path.exists(os.path.join(split_path,'train_set')):
+        if os.path.exists(os.path.join(split_path,'train_set')):
             train_traces=load_dict_from_csv(os.path.join(split_path,'train_set'),columns=['user','video'])
             test_traces=load_dict_from_csv(os.path.join(split_path,'test_set'),columns=['user','video'])
             user_test_traces=load_dict_from_csv(os.path.join(split_path,'user_test_set'),columns=['user','video'])
@@ -190,6 +193,7 @@ if __name__=='__main__':
                                                                                                                     bins=2,
                                                                                                                     video_test_size=PERC_VIDEOS_TEST,
                                                                                                                     user_test_size=PERC_USERS_TEST)
+            os.makedirs(os.path.join(split_path))
             store_list_as_csv(os.path.join(split_path,'train_set'),['user','video'],train_traces)
             store_list_as_csv(os.path.join(split_path,'test_set'),['user','video'],test_traces)
             store_list_as_csv(os.path.join(split_path,'user_test_set'),['user','video'],user_test_traces)
@@ -205,13 +209,10 @@ if __name__=='__main__':
     #print(train_traces.shape)
     #print(test_traces.shape)
     #print(partitions)
-
     # Dictionary that stores the traces per video and user
     all_traces = {}
     for video in videos:
-        all_traces[video] = {}
-        for user in users_per_video[video]:
-            all_traces[video][user] = read_sampled_positions_for_trace(SAMPLED_DATASET_FOLDER, str(video), str(user))
+        all_traces[video] = read_sampled_unit_vectors_by_users(VIDEO_DATA_FOLDER, video,users_per_video[video])
 
     #print(users_per_video[videos[0]])        
     #print(all_traces[videos[0]][users_per_video[videos[0]][0]])
@@ -221,16 +222,21 @@ if __name__=='__main__':
 
     all_saliencies = {}
     if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency']:
-        for video in videos:
-            print(f"Loading {video} saliencies")
-            all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
+        if args.use_true_saliency:
+            for video in videos:
+                print(f"Loading {video} saliencies")
+                all_saliencies[video]=load_true_saliency(TRUE_SALIENCY_FOLDER,video)
+        else:
+            for video in videos:
+                print(f"Loading {video} saliencies")
+                all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
 
 
     train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
     train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
     test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
     test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
-
+    exit()
     if model_name == 'pos_only':
         criterion = OrthDist()
     elif model_name == 'TRACK':

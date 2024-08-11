@@ -18,11 +18,13 @@ def read_sampled_unit_vectors_for_video(video_data_folder, video):
     data = np.load(path)
     return data
 
-def read_sampled_unit_vectors_for_user(video_data_folder, video, user):
+def read_sampled_unit_vectors_by_users(video_data_folder, video, user_list):
     trace_path = os.path.join(video_data_folder, video,f'{video}_unit_vectors.npy')
-    user_path=os.path.join(video_data_folder, video,f'{video}_unit_vectors.npy')
     data = np.load(trace_path)
-    return data
+    vid_traces={}
+    for i,user in enumerate(user_list):
+        vid_traces[user]=data[i]
+    return vid_traces
 
 # Returns the sampled length of traces of given video
 def get_video_length(video_data_folder,video):
