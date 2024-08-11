@@ -198,7 +198,6 @@ if __name__=='__main__':
             store_list_as_csv(os.path.join(split_path,'test_set'),['user','video'],test_traces)
             store_list_as_csv(os.path.join(split_path,'user_test_set'),['user','video'],user_test_traces)
             store_list_as_csv(os.path.join(split_path,'video_test_set'),['user','video'],video_test_traces)
-            print(train_traces.shape)
         partitions=partition_in_train_and_test(VIDEO_DATA_FOLDER,
                                                init_window=INIT_WINDOW,
                                                end_window=END_WINDOW,
