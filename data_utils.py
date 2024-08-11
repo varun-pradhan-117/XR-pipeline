@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
+from sklearn.model_selection import train_test_split
 
 NOSSDAV_sample_folder="Fan_NOSSDAV_17/sampled_dataset"
 def fan_nossdav_split(NOSSDAV_sample_folder,user_ratio=0.6, video_ratio=0.6):
@@ -54,6 +55,97 @@ def reshape_ip(input):
     input=[ip.squeeze(dim=1) for ip in input]
     return input
 
+def get_trace_pairs(users_per_video,video_list,user_list):
+    trace_pairs=[]
+    for video in video_list:
+        for user in user_list:
+            if user in users_per_video[video]:
+                trace_pairs.append([user,video])
+    return np.array(trace_pairs)
+
+def var_norm(data, epsilon=1e-5):
+    return np.var(data)/max(np.mean(data),epsilon)
+def split_videos(dataset_dir,bins=2, video_test_size=0.4):
+    data_dir=os.path.join(dataset_dir,'video_data')
+    videos=os.listdir(data_dir)
+    AE={}
+    SI={}
+    TI={}
+    CE={}
+    for video in videos:
+        vid_path=os.path.join(data_dir,video)
+        siti_path=os.path.join(data_dir,video)
+        AE[video]=np.load(os.path.join(vid_path,f'{video}_AEs.npy'))
+        AE[video]=np.mean(AE[video])
+        CE[video]=np.load(os.path.join(vid_path,f'{video}_content_entropy.npy'))
+        CE[video]=np.mean(CE[video])
+        SI[video]=np.load(os.path.join(siti_path,f'{video}_SI.npy'))
+        SI[video]=np.mean(SI[video])
+        TI[video]=np.load(os.path.join(siti_path,f'{video}_TI.npy'))
+        TI[video]=np.mean(TI[video])
+    ae_bins = pd.qcut(list(AE.values()), q=bins, labels=False)
+    ce_bins = pd.qcut(list(CE.values()), q=bins, labels=False)
+    si_bins = pd.qcut(list(SI.values()), q=bins, labels=False)
+    ti_bins = pd.qcut(list(TI.values()), q=bins, labels=False)
+    
+    strat_keys = [f"{ae}_{ce}" for ae, ce in zip(ae_bins, ce_bins)]
+    
+    try:
+        train_videos, test_videos = train_test_split(videos, test_size=video_test_size, stratify=strat_keys)
+    except ValueError :
+        print("Can't use combined stratified key")
+        ae_variance = var_norm(list(AE.values()))
+        ce_variance = var_norm(list(CE.values()))
+        if ae_variance > ce_variance:
+            strat_keys = ae_bins
+            print("Using AE for stratification")
+        else:
+            strat_keys = ce_bins
+            print("Using CE for stratification")
+        
+        try:
+            train_videos, test_videos = train_test_split(videos, test_size=video_test_size, stratify=strat_keys)
+        except ValueError:
+            print("Can't use stratified keys, using random split instead.")
+            train_videos, test_videos = train_test_split(videos, test_size=video_test_size)
+    
+    """ # Separate the metrics into train and test sets
+    train_AE = [AE[video] for video in train_videos]
+    train_CE = [CE[video] for video in train_videos]
+
+    test_AE = [AE[video] for video in test_videos]
+    test_CE = [CE[video] for video in test_videos]
+    # Step 4: Plot the metrics
+
+    plt.figure(figsize=(12, 6))
+
+    # Plot AE vs CE
+    plt.scatter(train_AE, train_CE, color='blue', label='Train')
+    plt.scatter(test_AE, test_CE, color='red', label='Test')
+    plt.xlabel('AE')
+    plt.ylabel('CE')
+    plt.title('AE vs CE')
+    plt.legend()
+
+    plt.show() """
+    return train_videos,test_videos
+
+def split_data_all_users(dataset_dir,total_users,users_per_video,bins=2,video_test_size=0.4,user_test_size=0.4):
+    train_vids,test_vids=split_videos(dataset_dir=dataset_dir,bins=bins,video_test_size=video_test_size)
+    random.shuffle(total_users)
+    num_train_vids=len(train_vids)
+    
+    # Get train and test users
+    num_train_users=int(len(total_users)*(1-video_test_size))
+    train_users = total_users[:num_train_users]
+    test_users = total_users[num_train_users:]
+    
+    train_traces=get_trace_pairs(users_per_video,train_vids,train_users)
+    test_traces=get_trace_pairs(users_per_video,test_vids,test_users)
+    new_video_old_user_traces=get_trace_pairs(users_per_video,test_vids,train_users)
+    old_video_new_user_traces=get_trace_pairs(users_per_video,train_vids,test_users)
+    return train_traces,test_traces,new_video_old_user_traces,old_video_new_user_traces, train_vids,test_vids
+    
 
 class PositionDataset(Dataset):
     def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None):

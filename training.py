@@ -7,10 +7,10 @@ import os
 import sys
 import argparse
 
-
-from SampledDataset import read_sampled_positions_for_trace, load_saliency, load_true_saliency, get_video_ids, get_user_ids, get_users_per_video, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection, partition_in_train_and_test
+from DatasetHelper import partition_in_train_and_test
+from SampledDataset import read_sampled_positions_for_trace, load_saliency, load_true_saliency, get_video_ids, get_user_ids, get_users_per_video, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
-from data_utils import fan_nossdav_split, PositionDataset
+from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users
 import TRACK_POS, TRACK_SAL
 
 if torch.cuda.is_available():
@@ -84,8 +84,8 @@ NUM_TILES_HEIGHT=240
 NUM_TILES_WIDTH_TRUE_SAL = 256
 NUM_TILES_HEIGHT_TRUE_SAL = 256
 RATE = 0.2
-PERC_VIDEOS_TRAIN = 0.6
-PERC_USERS_TRAIN = 0.6
+PERC_VIDEOS_TEST = 0.4
+PERC_USERS_TEST = 0.4
 BATCH_SIZE = 128
 TRAIN_MODEL = False
 EVALUATE_MODEL = False
@@ -97,6 +97,7 @@ if args.evaluate_flag:
 root_dataset_folder = os.path.join('/media/Blue2TB1', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
 SAMPLED_DATASET_FOLDER=os.path.join(root_dataset_folder,'sampled_dataset')
+VIDEO_DATA_FOLDER=os.path.join(root_dataset_folder,'video_data')
 
 EXP_FOLDER = args.exp_folder
 # If EXP_FOLDER is defined, add "Paper_exp" to the results name and use the folder in EXP_FOLDER as dataset folder
@@ -177,19 +178,30 @@ if __name__=='__main__':
 
     if dataset_name=="Fan_NOSSDAV_17":
         split_path=os.path.join(dataset_name,"splits")
-        if os.path.exists(os.path.join(split_path,'train_set')):
+        if False and os.path.exists(os.path.join(split_path,'train_set')):
             train_traces=load_dict_from_csv(os.path.join(split_path,'train_set'),columns=['user','video'])
             test_traces=load_dict_from_csv(os.path.join(split_path,'test_set'),columns=['user','video'])
             user_test_traces=load_dict_from_csv(os.path.join(split_path,'user_test_set'),columns=['user','video'])
             video_test_traces=load_dict_from_csv(os.path.join(split_path,'video_test_set'),columns=['user','video'])
         else:
-            train_traces,test_traces,video_test_traces,user_test_traces=fan_nossdav_split(video_ratio=PERC_VIDEOS_TRAIN,user_ratio=PERC_USERS_TRAIN)
+            train_traces,test_traces,video_test_traces,user_test_traces, train_vids, test_vids=split_data_all_users(root_dataset_folder,
+                                                                                                                    total_users=users,
+                                                                                                                    users_per_video=users_per_video,
+                                                                                                                    bins=2,
+                                                                                                                    video_test_size=PERC_VIDEOS_TEST,
+                                                                                                                    user_test_size=PERC_USERS_TEST)
             store_list_as_csv(os.path.join(split_path,'train_set'),['user','video'],train_traces)
             store_list_as_csv(os.path.join(split_path,'test_set'),['user','video'],test_traces)
             store_list_as_csv(os.path.join(split_path,'user_test_set'),['user','video'],user_test_traces)
             store_list_as_csv(os.path.join(split_path,'video_test_set'),['user','video'],video_test_traces)
-        partitions=partition_in_train_and_test(SAMPLED_DATASET_FOLDER,INIT_WINDOW,END_WINDOW,train_traces,test_traces,user_test_traces=user_test_traces,video_test_traces=video_test_traces)
-
+            print(train_traces.shape)
+        partitions=partition_in_train_and_test(VIDEO_DATA_FOLDER,
+                                               init_window=INIT_WINDOW,
+                                               end_window=END_WINDOW,
+                                               train_traces=train_traces,
+                                               test_traces=test_traces,
+                                               user_test_traces=user_test_traces,
+                                               video_test_traces=video_test_traces)
     #print(train_traces.shape)
     #print(test_traces.shape)
     #print(partitions)

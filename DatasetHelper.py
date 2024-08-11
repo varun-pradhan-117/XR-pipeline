@@ -11,6 +11,25 @@ def read_sampled_data_for_trace(video_data_folder, video, user):
     data = pd.read_csv(path, header=None)
     return data.values
 
+# returns the entire trace data for a given video
+# x,y,z in 3d coordinates for each user
+def read_sampled_unit_vectors_for_video(video_data_folder, video):
+    path = os.path.join(video_data_folder, video,f'{video}_unit_vectors.npy')
+    data = np.load(path)
+    return data
+
+def read_sampled_unit_vectors_for_user(video_data_folder, video, user):
+    trace_path = os.path.join(video_data_folder, video,f'{video}_unit_vectors.npy')
+    user_path=os.path.join(video_data_folder, video,f'{video}_unit_vectors.npy')
+    data = np.load(trace_path)
+    return data
+
+# Returns the sampled length of traces of given video
+def get_video_length(video_data_folder,video):
+    path = os.path.join(video_data_folder, video,f'{video}_timestamps.npy')
+    data = np.load(path)
+    return data.shape[0]
+
 # returns only the positions from the trace
 # ~time-stamp~ is removed from the output, only x, y, z (in 3d coordinates) is returned
 def read_sampled_positions_for_trace(video_data_folder, video, user):
@@ -127,7 +146,7 @@ def partition_in_train_and_test(video_data_folder, init_window, end_window, trai
         user = str(trace[0])
         video = trace[1]
         # to get the length of the trace
-        trace_length = read_sampled_data_for_trace(video_data_folder, video, user).shape[0]
+        trace_length = get_video_length(video_data_folder, video)
         for tstap in range(init_window, trace_length - end_window):
             ID = {'video': video, 'user': user, 'time-stamp': tstap}
             partition['train'].append(ID)
@@ -135,7 +154,7 @@ def partition_in_train_and_test(video_data_folder, init_window, end_window, trai
         user = str(trace[0])
         video = trace[1]
         # to get the length of the trace
-        trace_length = read_sampled_data_for_trace(video_data_folder, video, user).shape[0]
+        trace_length = get_video_length(video_data_folder, video)
         for tstap in range(init_window, trace_length - end_window):
             ID = {'video': video, 'user': user, 'time-stamp': tstap}
             partition['test'].append(ID)
@@ -146,7 +165,7 @@ def partition_in_train_and_test(video_data_folder, init_window, end_window, trai
             user = str(trace[0])
             video = trace[1]
             # to get the length of the trace
-            trace_length = read_sampled_data_for_trace(video_data_folder, video, user).shape[0]
+            trace_length = get_video_length(video_data_folder, video)
             for tstap in range(init_window, trace_length - end_window):
                 ID = {'video': video, 'user': user, 'time-stamp': tstap}
                 partition['user_test'].append(ID)
@@ -157,7 +176,7 @@ def partition_in_train_and_test(video_data_folder, init_window, end_window, trai
             user = str(trace[0])
             video = trace[1]
             # to get the length of the trace
-            trace_length = read_sampled_data_for_trace(video_data_folder, video, user).shape[0]
+            trace_length = get_video_length(video_data_folder, video)
             for tstap in range(init_window, trace_length - end_window):
                 ID = {'video': video, 'user': user, 'time-stamp': tstap}
                 partition['video_test'].append(ID)
