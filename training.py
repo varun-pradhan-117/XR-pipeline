@@ -8,9 +8,10 @@ import sys
 import argparse
 
 from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
-from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
+#from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users
+from trainers import train_model
 import TRACK_POS, TRACK_SAL
 
 if torch.cuda.is_available():
@@ -154,7 +155,7 @@ elif model_name == 'CVPR18':
 elif model_name == 'pos_only':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Models_EncDec_eulerian' + EXP_NAME)
-    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW)
+    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
 elif model_name == 'pos_only_3d_loss':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Models_EncDec_eulerian' + EXP_NAME)
@@ -235,10 +236,8 @@ if __name__=='__main__':
     train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
     test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
     test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
-    exit()
-    if model_name == 'pos_only':
-        criterion = OrthDist()
-    elif model_name == 'TRACK':
+    
+    if model_name == 'TRACK':
         metrics = {"orth_dist": MetricOrthLoss}
 
     EPOCHS=500

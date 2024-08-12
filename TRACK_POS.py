@@ -41,7 +41,8 @@ class TRACK_POS(nn.Module):
         self.output_horizon=H_WINDOW
         self.input_window=M_WINDOW
     
-    def forward(self,encoder_inputs,decoder_inputs):
+    def forward(self,X):
+        encoder_inputs,decoder_inputs=X
         encoder_outputs,states=self.lstm_layer(encoder_inputs)
         all_outputs=[]
         inputs=decoder_inputs
@@ -55,10 +56,10 @@ class TRACK_POS(nn.Module):
             #print(inputs.shape)
         
         return torch.cat(all_outputs,dim=1)
-
-def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2):
-    model=TRACK_POS(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size)
-    optimizer=optim.AdamW(model.parameters(),lr=0.0005)
+    
+def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2, lr=0.0005, device='cpu'):
+    model=TRACK_POS(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size).to(device)
+    optimizer=optim.AdamW(model.parameters(),lr=lr)
     criterion=MetricOrthLoss
     return model,optimizer,criterion
 
@@ -77,9 +78,7 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
         #print(model.state_dict())
         for ip,targets in train_loader:
             optimizer.zero_grad()
-            encoder_inputs,decoder_inputs=ip
-            encoder_inputs=encoder_inputs.squeeze().to(device)
-            decoder_inputs=decoder_inputs.squeeze(axis=1).to(device)
+            ip=[t.squeeze(axis=1).to(device) for t in ip]
             targets=targets.squeeze(axis=1)
             #print(encoder_inputs)
             prediction=model(encoder_inputs,decoder_inputs)
