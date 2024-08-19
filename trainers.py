@@ -8,10 +8,11 @@ import os
 
 
 
-def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None):
+def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False):
     best_val_loss=float('inf')
     device=torch.device(device)
-    os.makedirs(path, exist_ok=True)
+    if not os.path.exists(path):
+        os.makedirs(path)
     #torch.autograd.set_detect_anomaly(True)
     if optimizer is None:
         optimizer=optim.AdamW(model.parameters(),lr=5e-4)
@@ -40,8 +41,6 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             prediction=model(ip)
             loss=criterion(prediction,targets)
             loss.backward()
-
-                    
             if metric is not None:
                 for name,func in metric.items():
                     metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
@@ -66,11 +65,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             #torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             epoch_losses[epoch].append(loss.item())
-            print(f"Batch {idx}/{len(train_loader)} - loss:{epoch_losses[epoch][-1]:.4f}", end=' ')
-            if metric is not None:
-                for name, value in metric_val.items():
-                        print(f" - {name}: {value:.4f}",end=' ')
-            print()
+            if verbose:
+                print(f"Batch {idx}/{len(train_loader)} - loss:{epoch_losses[epoch][-1]:.4f}", end=' ')
+                if metric is not None:
+                    for name, value in metric_val.items():
+                            print(f" - {name}: {value:.4f}",end=' ')
+                print()
             #print(50*"*")
         #print(sum(epoch_losses))
         #print(len(epoch_losses))
@@ -113,9 +113,18 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
         last_saved+=1
         if epoch_val_loss<best_val_loss:
             best_val_loss=epoch_val_loss
-            torch.save(model.state_dict(),f'{path}.pth')
+            checkpoint={
+                'model_state_dict':model.state_dict(),
+                'optimizer_state':optimizer.state_dict(),
+                'losses':losses,
+                'val_losses':val_losses,
+                'epoch':'epoch'
+            }
+            save_path=os.path.join(path,f'Epoch_{epoch}.pth')
+
+            torch.save(checkpoint,save_path)
             last_saved=0
             print(f"Model saved at {epoch+1} with validation loss: {epoch_val_loss:.4f}")
-        if last_saved>5:
+        if last_saved>tolerance:
             break
     return losses, val_losses

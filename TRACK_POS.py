@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 from torchinfo import summary
+import os
 
 def MetricOrthLoss(pred_position, true_position):
     yaw_true = (true_position[:, :, 0:1] - 0.5) * 2*np.pi
@@ -81,7 +82,7 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
             ip=[t.squeeze(axis=1).to(device) for t in ip]
             targets=targets.squeeze(axis=1)
             #print(encoder_inputs)
-            prediction=model(encoder_inputs,decoder_inputs)
+            prediction=model(ip)
             loss=criterion(prediction,targets.to(device))
             loss.backward()
             optimizer.step()
@@ -96,12 +97,10 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
         model.eval()
         epoch_val_losses=[]
         for ip,targets in validation_loader:
-            encoder_inputs,decoder_inputs=ip
-            encoder_inputs=encoder_inputs.squeeze().to(device)
-            decoder_inputs=decoder_inputs.squeeze(axis=1).to(device)
+            ip=[t.squeeze(axis=1).to(device) for t in ip]
             targets=targets.squeeze(axis=1)
             #print(encoder_inputs)
-            prediction=model(encoder_inputs,decoder_inputs)
+            prediction=model(ip)
             loss=criterion(prediction,targets.to(device))
             #print("-------")
             #print(model.state_dict())
@@ -122,7 +121,8 @@ def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion
                 'val_losses':val_losses,
                 'epoch':'epoch'
             }
-            torch.save(checkpoint,path)
+            save_path=os.path.join(path,f'class_trainer_Epoch_{epoch}.pth')
+            torch.save(checkpoint,save_path)
             print(f"Model saved at {epoch+1} with validation loss: {epoch_val_loss:.4f}")
         if last_saved>20:
             break

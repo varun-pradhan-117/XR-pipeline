@@ -40,7 +40,6 @@ parser.add_argument('-video_test_chinacom', action="store", dest='video_test_chi
 parser.add_argument('-metric', action="store", dest='metric', help='Which metric to use, by default, orthodromic distance is used.')
 
 args = parser.parse_args()
-
 # Parse arguments (or assign default)
 if args.dataset_name is None:
     dataset_name="Fan_NOSSDAV_17"
@@ -123,14 +122,16 @@ if model_name == 'TRACK':
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Models_EncDec_3DCoords_TrueSal' + EXP_NAME)
         model,optimizer,criterion=TRACK_SAL.create_sal_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
-                                                             NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
-                                                             NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
+                                                             NUM_TILES_HEIGHT=NUM_TILES_HEIGHT_TRUE_SAL,
+                                                             NUM_TILES_WIDTH=NUM_TILES_WIDTH_TRUE_SAL, device=device)
     else:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Results_EncDec_3DCoords_ContSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'TRACK/Models_EncDec_3DCoords_ContSal' + EXP_NAME)
         model,optimizer,criterion=TRACK_SAL.create_sal_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
                                                              NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
                                                              NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
+if model_name=='DVMS':
+    
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -245,15 +246,14 @@ if __name__=='__main__':
     print(model_save_path)
     #torch.autograd.set_detect_anomaly(True)
     if model_name=='pos_only':
-        losses, val_losses=TRACK_POS.train_pos_only(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS, device=device,path=model_save_path)
-        #print(model.state_dict())
+        losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path, tolerance=10)
         print(f"Final Loss:{losses[-1]:.4f}")
         if not os.path.exists(os.path.join('Losses',dataset_name)):
-            os.makedirs(os.path.join('LOsses',dataset_name))
+            os.makedirs(os.path.join('Losses',dataset_name))
         torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
     elif model_name=='TRACK':
-        losses,val_losses=TRACK_SAL.train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path)
+        losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path, tolerance=10)
         print(f"Final Loss:{losses[-1]:.4f}")
         if not os.path.exists(os.path.join('Losses',dataset_name)):
-            os.makedirs(os.path.join('LOsses',dataset_name))
+            os.makedirs(os.path.join('Losses',dataset_name))
         torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))

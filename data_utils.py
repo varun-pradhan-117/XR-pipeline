@@ -172,7 +172,7 @@ class PositionDataset(Dataset):
         decoder_sal_inputs_for_batch = []
         decoder_outputs_for_batch = []
         
-        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18']:
+        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS']:
             encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
@@ -200,7 +200,7 @@ class PositionDataset(Dataset):
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
-        elif self.model_name == 'pos_only':
+        elif self.model_name == 'pos_only' or self.model_name =='DVMS':
             return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), 
                     torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_pos_inputs_for_batch),dtype=torch.float32)], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)
         elif self.model_name == 'pos_only_3d_loss':

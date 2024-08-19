@@ -1,7 +1,8 @@
 import torch
 from torch import nn
 from typing import TypeVar, List
-
+import torch.optim as optim
+import numpy as np
 Tensor = TypeVar('Tensor',torch.tensor)
 
 
@@ -151,3 +152,9 @@ class DVMS(nn.Module):
 
         samples = self.decode([past_state, z, current])
         return samples
+
+def create_DVMS_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=0.0005,K= device='cpu'):
+    model=DVMS(in_channels=input_size_pos,h_window=H_WINDOW).to(device)
+    optimizer=optim.AdamW(model.parameters(),lr=lr)
+    criterion=lambda *x:flat_top_k_orth_dist(*x,K)
+    return model,optimizer,criterion
