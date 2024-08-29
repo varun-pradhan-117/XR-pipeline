@@ -8,10 +8,11 @@ import os
 
 
 
-def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False):
+def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
     best_val_loss=float('inf')
     device=torch.device(device)
-    if not os.path.exists(path):
+    if not os.path.isdir(path):
+        print(f"Making folder {path}")
         os.makedirs(path)
     #torch.autograd.set_detect_anomaly(True)
     if optimizer is None:
@@ -35,12 +36,22 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
         metric_val={}
         for idx,(ip,targets) in enumerate(train_loader):
             optimizer.zero_grad()
-            ip=(t.squeeze(axis=1).float().to(device) for t in ip)
+            #print(ip)
+            ip=[t.squeeze(axis=1).float().to(device) for t in ip]
+            #print(ip)
             targets=targets.squeeze(axis=1).float().to(device)
             #print(encoder_inputs)
-            prediction=model(ip)
-            loss=criterion(prediction,targets)
+            if model_name=='DVMS':
+                prediction=model(ip,targets)
+                loss=criterion(*prediction)['loss']
+            else:
+                prediction=model(ip)
+                loss=criterion(prediction,targets)
+                
             loss.backward()
+            
+            
+            
             if metric is not None:
                 for name,func in metric.items():
                     metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
@@ -90,10 +101,14 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 eval_metrics[name]=[]
         for ip,targets in validation_loader:
             ip=(t.squeeze(axis=1).to(device) for t in ip)    
-            targets=targets.squeeze(axis=1)     
+            targets=targets.squeeze(axis=1).to(device)     
             #print(encoder_inputs)
-            prediction=model(ip)
-            loss=criterion(prediction,targets.to(device))
+            if model_name=='DVMS':
+                prediction=model(ip,targets)
+                loss=criterion(*prediction)['loss']
+            else:
+                prediction=model(ip)
+                loss=criterion(prediction,targets)
             #print("-------")
             #print(model.state_dict())
             #return 0
@@ -128,3 +143,10 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
         if last_saved>tolerance:
             break
     return losses, val_losses
+
+
+def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None, metric=None):
+    model.eval()
+    if metric is not None:
+        for name,func in metric.items():
+            eval_metrics[name]=[]

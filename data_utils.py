@@ -200,10 +200,10 @@ class PositionDataset(Dataset):
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
-        elif self.model_name == 'pos_only' or self.model_name =='DVMS':
+        elif self.model_name == 'pos_only':
             return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), 
                     torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_pos_inputs_for_batch),dtype=torch.float32)], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)
-        elif self.model_name == 'pos_only_3d_loss':
+        elif self.model_name in ['pos_only_3d_loss','DVMS']:
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name == 'CVPR18_orig':

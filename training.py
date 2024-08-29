@@ -12,7 +12,7 @@ from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_i
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users
 from trainers import train_model
-import TRACK_POS, TRACK_SAL
+import TRACK_POS, TRACK_SAL, DVMS
 
 if torch.cuda.is_available():
     device=torch.device("cuda")
@@ -38,6 +38,8 @@ parser.add_argument('-use_true_saliency', action="store_true", dest='use_true_sa
 parser.add_argument('-num_of_peaks', action="store", dest='num_of_peaks', help='Value used to get number of peaks from the true_saliency baseline.')
 parser.add_argument('-video_test_chinacom', action="store", dest='video_test_chinacom', help='Which video will be used to test in ChinaCom, the rest of the videos will be used to train')
 parser.add_argument('-metric', action="store", dest='metric', help='Which metric to use, by default, orthodromic distance is used.')
+parser.add_argument('-K', action="store", dest='K',
+                    help='(Optional) Number of predicted trajectories (default to 2).')
 
 args = parser.parse_args()
 # Parse arguments (or assign default)
@@ -76,6 +78,9 @@ if args.metric is None:
 else:
     assert args.metric in all_metrics.keys()
     metric = all_metrics[args.metric]
+if args.K is not None:
+    K = int(args.K)
+
 
 # Fixed parameters
 EPOCHS=500
@@ -88,6 +93,7 @@ PERC_VIDEOS_TEST = 0.4
 PERC_USERS_TEST = 0.4
 BATCH_SIZE = 128
 TRAIN_MODEL = False
+K=2
 EVALUATE_MODEL = False
 if args.train_flag:
     TRAIN_MODEL = True
@@ -103,6 +109,8 @@ EXP_FOLDER = args.exp_folder
 # If EXP_FOLDER is defined, add "Paper_exp" to the results name and use the folder in EXP_FOLDER as dataset folder
 if EXP_FOLDER is None:
     EXP_NAME = '_init_' + str(INIT_WINDOW) + '_in_' + str(M_WINDOW) + '_out_' + str(H_WINDOW) + '_end_' + str(END_WINDOW)
+    if model_name=='DVMS':
+        EXP_NAME=f'{EXP_NAME}_K{K}'
     SAMPLED_DATASET_FOLDER = os.path.join(root_dataset_folder, 'sampled_dataset')
 else:
     EXP_NAME = '_Paper_Exp_init_' + str(INIT_WINDOW) + '_in_' + str(M_WINDOW) + '_out_' + str(H_WINDOW) + '_end_' + str(END_WINDOW)
@@ -131,7 +139,9 @@ if model_name == 'TRACK':
                                                              NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
                                                              NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
 if model_name=='DVMS':
-    
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, f'DVMS/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, f'DVMS/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
+    model,optimizer,criterion=DVMS.create_DVMS_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,K=K,device=device)
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -181,7 +191,7 @@ if __name__=='__main__':
     users = get_user_ids(VIDEO_DATA_FOLDER)
     users_per_video = get_users_per_video(VIDEO_DATA_FOLDER)
 
-    if dataset_name in ["Fan_NOSSDAV_17","Jin_22"]:
+    if dataset_name in ["Fan_NOSSDAV_17","Jin_22", 'PAMI18']:
         split_path=os.path.join(dataset_name,"splits")
         if os.path.exists(os.path.join(split_path,'train_set')):
             train_traces=load_dict_from_csv(os.path.join(split_path,'train_set'),columns=['user','video'])
@@ -222,7 +232,7 @@ if __name__=='__main__':
 
 
     all_saliencies = {}
-    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency']:
+    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -245,15 +255,23 @@ if __name__=='__main__':
     model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     print(model_save_path)
     #torch.autograd.set_detect_anomaly(True)
-    if model_name=='pos_only':
-        losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path, tolerance=10)
-        print(f"Final Loss:{losses[-1]:.4f}")
-        if not os.path.exists(os.path.join('Losses',dataset_name)):
-            os.makedirs(os.path.join('Losses',dataset_name))
-        torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
-    elif model_name=='TRACK':
-        losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,device=device,path=model_save_path, tolerance=10)
-        print(f"Final Loss:{losses[-1]:.4f}")
-        if not os.path.exists(os.path.join('Losses',dataset_name)):
-            os.makedirs(os.path.join('Losses',dataset_name))
-        torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
+    if args.train_flag:
+        if model_name in ['pos_only','DVMS']:
+            losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,
+                                        device=device,path=model_save_path, tolerance=10, model_name=model_name)
+            print(f"Final Loss:{losses[-1]:.4f}")
+            if not os.path.exists(os.path.join('Losses',dataset_name)):
+                os.makedirs(os.path.join('Losses',dataset_name))
+            torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
+    
+    if args.evaluate_flag:
+        saved_models=os.listdir(model_save_path)
+        epoch_files=[f for f in saved_models if f.endswith('.pth')]
+        if not epoch_files:
+            raise FileNotFoundError("No saved models for given model name and dataset.")
+        epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
+        latest=max(epoch_numbers)
+        best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
+        model_data=torch.load(best_model)
+        model.load_state_dict(model_data['model_state_dict'])
+        

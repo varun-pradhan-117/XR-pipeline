@@ -3,8 +3,8 @@ from torch import nn
 from typing import TypeVar, List
 import torch.optim as optim
 import numpy as np
-Tensor = TypeVar('Tensor',torch.tensor)
-
+#Tensor = TypeVar('Tensor',torch.tensor)
+Tensor=torch.tensor
 
 def metric_orth_dist(position_a, position_b):
     # Normalize onto the unit sphere
@@ -94,7 +94,7 @@ class DVMS(nn.Module):
             decoder_input = result_pos
         return torch.cat(result, dim=1)
 
-    def forward(self, inputs: List[Tensor]) -> List[Tensor]:
+    def forward(self, inputs, future):
         """
         Forward pass through the network. Encode the past trajectory and decode the future trajectory.
         :param inputs: List of 3 Tensor objects containing:
@@ -104,7 +104,7 @@ class DVMS(nn.Module):
         :return: (List of Tensor) Decoded future trajectories [batch_size * n_samples_train x H x in_channels]
                                   along with aligned repeated ground truth futures [batch_size * n_samples_train x H x in_channels]
         """
-        (past, current), future = inputs
+        (past, current) = inputs
         past_state = self.encode(past)
 
         past_state = torch.repeat_interleave(past_state, self.n_samples_train, dim=0)
@@ -153,8 +153,9 @@ class DVMS(nn.Module):
         samples = self.decode([past_state, z, current])
         return samples
 
-def create_DVMS_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=0.0005,K= device='cpu'):
-    model=DVMS(in_channels=input_size_pos,h_window=H_WINDOW).to(device)
+def create_DVMS_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=0.0005,K=2, device='cpu'):
+    model=DVMS(in_channels=input_size_pos,h_window=H_WINDOW,n_samples_train=K).to(device)
     optimizer=optim.AdamW(model.parameters(),lr=lr)
-    criterion=lambda *x:flat_top_k_orth_dist(*x,K)
+    #criterion=lambda *x:flat_top_k_orth_dist(*x,K)
+    criterion=model.loss_function
     return model,optimizer,criterion
