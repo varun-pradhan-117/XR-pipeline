@@ -5,14 +5,17 @@ from torch.utils.data import DataLoader
 from torchinfo import summary
 import os
 import sys
+import csv
 import argparse
 
 from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
 #from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
-from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
-from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users
-from trainers import train_model
+from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
+from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv
+from trainers import train_model, test_model
 import TRACK_POS, TRACK_SAL, DVMS
+
+
 
 if torch.cuda.is_available():
     device=torch.device("cuda")
@@ -26,6 +29,7 @@ parser = argparse.ArgumentParser(description='Process the input parameters to tr
 
 parser.add_argument('-train', action="store_true", dest='train_flag', help='Flag that tells if we will run the training procedure.')
 parser.add_argument('-evaluate', action="store_true", dest='evaluate_flag', help='Flag that tells if we will run the evaluation procedure.')
+parser.add_argument('-evaluate_vid', action="store_true", dest='evaluate_vid_flag', help='Flag that tells if we will run the evaluation procedure per video.')
 parser.add_argument('-dataset_name', action='store', dest='dataset_name', help='The name of the dataset used to train this network.')
 parser.add_argument('-model_name', action='store', dest='model_name', help='The name of the model used to reference the network structure used.')
 parser.add_argument('-init_window', action='store', dest='init_window', help='(Optional) Initial buffer window (to avoid stationary part).', type=int)
@@ -40,6 +44,7 @@ parser.add_argument('-video_test_chinacom', action="store", dest='video_test_chi
 parser.add_argument('-metric', action="store", dest='metric', help='Which metric to use, by default, orthodromic distance is used.')
 parser.add_argument('-K', action="store", dest='K',
                     help='(Optional) Number of predicted trajectories (default to 2).')
+
 
 args = parser.parse_args()
 # Parse arguments (or assign default)
@@ -80,6 +85,8 @@ else:
     metric = all_metrics[args.metric]
 if args.K is not None:
     K = int(args.K)
+else:
+    K=2
 
 
 # Fixed parameters
@@ -93,12 +100,13 @@ PERC_VIDEOS_TEST = 0.4
 PERC_USERS_TEST = 0.4
 BATCH_SIZE = 128
 TRAIN_MODEL = False
-K=2
 EVALUATE_MODEL = False
 if args.train_flag:
     TRAIN_MODEL = True
 if args.evaluate_flag:
     EVALUATE_MODEL = True
+if args.evaluate_vid_flag:
+    EVALUATE_VIDEOS=True
 
 root_dataset_folder = os.path.join('/media/Blue2TB1', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
@@ -123,7 +131,7 @@ if model_name == 'MM18':
     TRUE_SALIENCY_FOLDER = os.path.join(root_dataset_folder, 'mm18_true_saliency')
 else:
     TRUE_SALIENCY_FOLDER = os.path.join(root_dataset_folder, 'true_saliency')
-
+eval_metrics={}
 # Define mdoel and results folder 
 if model_name == 'TRACK':
     if args.use_true_saliency:
@@ -138,10 +146,13 @@ if model_name == 'TRACK':
         model,optimizer,criterion=TRACK_SAL.create_sal_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
                                                              NUM_TILES_HEIGHT=NUM_TILES_HEIGHT,
                                                              NUM_TILES_WIDTH=NUM_TILES_WIDTH, device=device)
+    eval_metrics['orth_dist']=get_orthodromic_distance_cartesian
 if model_name=='DVMS':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, f'DVMS/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, f'DVMS/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
-    model,optimizer,criterion=DVMS.create_DVMS_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,K=K,device=device)
+    model,optimizer,criterion=DVMS.create_DVMS_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
+                                                     K=K,device=device)
+    eval_metrics['orth_dist']=DVMS.flat_top_k_orth_dist
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -167,6 +178,7 @@ elif model_name == 'pos_only':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Models_EncDec_eulerian' + EXP_NAME)
     model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
+    eval_metrics['orth_dist']=get_orthodromic_distance_euler
 elif model_name == 'pos_only_3d_loss':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Models_EncDec_eulerian' + EXP_NAME)
@@ -198,6 +210,7 @@ if __name__=='__main__':
             test_traces=load_dict_from_csv(os.path.join(split_path,'test_set'),columns=['user','video'])
             user_test_traces=load_dict_from_csv(os.path.join(split_path,'user_test_set'),columns=['user','video'])
             video_test_traces=load_dict_from_csv(os.path.join(split_path,'video_test_set'),columns=['user','video'])
+            test_vids=load_dict_from_csv(os.path.join(split_path,'test_vids'),columns=['video'])
         else:
             train_traces,test_traces,video_test_traces,user_test_traces, train_vids, test_vids=split_data_all_users(root_dataset_folder,
                                                                                                                     total_users=users,
@@ -217,6 +230,7 @@ if __name__=='__main__':
                                                test_traces=test_traces,
                                                user_test_traces=user_test_traces,
                                                video_test_traces=video_test_traces)
+
     #print(train_traces.shape)
     #print(test_traces.shape)
     #print(partitions)
@@ -243,20 +257,22 @@ if __name__=='__main__':
                 all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
 
 
-    train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
-    train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
-    test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
-    test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
     
-    if model_name == 'TRACK':
+    
+    
+    if model_name in ['TRACK', 'DVMS']:
         metrics = {"orth_dist": MetricOrthLoss}
-
+    else:
+        metrics=None
     EPOCHS=500
     model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     print(model_save_path)
     #torch.autograd.set_detect_anomaly(True)
-    if args.train_flag:
-        if model_name in ['pos_only','DVMS']:
+    if TRAIN_MODEL:
+        train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+        train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
+        if model_name in ['pos_only','DVMS','TRACK']:
             losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,
                                         device=device,path=model_save_path, tolerance=10, model_name=model_name)
             print(f"Final Loss:{losses[-1]:.4f}")
@@ -264,7 +280,10 @@ if __name__=='__main__':
                 os.makedirs(os.path.join('Losses',dataset_name))
             torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
     
-    if args.evaluate_flag:
+    if EVALUATE_MODEL:
+        test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+        test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
         saved_models=os.listdir(model_save_path)
         epoch_files=[f for f in saved_models if f.endswith('.pth')]
         if not epoch_files:
@@ -272,6 +291,25 @@ if __name__=='__main__':
         epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
         latest=max(epoch_numbers)
         best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
-        model_data=torch.load(best_model)
+        model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
+        plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
         
+    if EVALUATE_VIDEOS:
+        saved_models=os.listdir(model_save_path)
+        epoch_files=[f for f in saved_models if f.endswith('.pth')]
+        if not epoch_files:
+            raise FileNotFoundError("No saved models for given model name and dataset.")
+        epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
+        latest=max(epoch_numbers)
+        best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
+        model_data=torch.load(best_model,weights_only=False)
+        model.load_state_dict(model_data['model_state_dict'])
+        test_vids=[vid[0] for vid in test_vids]
+        print(*test_vids)
+        plot_path=os.path.join("Test_vid_plots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        for video in test_vids:
+            test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video)
+            test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
+            test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video)

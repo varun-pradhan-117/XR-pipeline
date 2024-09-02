@@ -146,9 +146,19 @@ def split_data_all_users(dataset_dir,total_users,users_per_video,bins=2,video_te
     old_video_new_user_traces=get_trace_pairs(users_per_video,train_vids,test_users)
     return train_traces,test_traces,new_video_old_user_traces,old_video_new_user_traces, train_vids,test_vids
     
+def save_unique_videos_to_csv(unique_videos, output_csv_path):
+        # Prepare data for writing
+        data_to_write = [['video']] + [[video] for video in unique_videos]
 
+        # Write the data to a CSV file
+        with open(output_csv_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerows(data_to_write)
+
+        print(f"Unique videos saved to {output_csv_path}")
+        
 class PositionDataset(Dataset):
-    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None):
+    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None, video_name=None):
         self.list_IDs=list_IDs
         self.all_saliencies=all_saliencies
         self.all_traces=all_traces
@@ -156,6 +166,9 @@ class PositionDataset(Dataset):
         self.M_WINDOW=M_WINDOW
         self.model_name=model_name
         self.future_window=future_window
+        # Filter list_IDs by video_name if specified
+        if video_name is not None:
+            self.list_IDs = [ID for ID in self.list_IDs if ID['video'] == video_name]
         
     def __len__(self):
         return len(self.list_IDs)

@@ -131,7 +131,7 @@ class DVMS(nn.Module):
 
         return {'loss': loss}
 
-    def sample(self, inputs: List[Tensor]) -> Tensor:
+    def sample(self, inputs):
         """
         Sample from the latent space and return the corresponding decoded trajectories.
         :param inputs: List of 2 Tensor objects containing:

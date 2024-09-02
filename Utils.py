@@ -177,6 +177,36 @@ def MetricOrthLoss(position_a, position_b,epsilon=1e-8):
     great_circle_distance = torch.acos(torch.clamp(x_true * x_pred + y_true * y_pred + z_true * z_pred, -1.0, 1.0))
     return great_circle_distance.mean()
 
+def get_orthodromic_distance_euler(pred_position, true_position):
+    yaw_true = (true_position[:, :, 0:1] - 0.5) * 2*np.pi
+    pitch_true = (true_position[:, :, 1:2] - 0.5) * np.pi
+    # Transform it to range -pi, pi for yaw and -pi/2, pi/2 for pitch
+    yaw_pred = (pred_position[:, :, 0:1] - 0.5) * 2*np.pi
+    pitch_pred = (pred_position[:, :, 1:2] - 0.5) * np.pi
+    delta_long = torch.abs(torch.atan2(torch.sin(yaw_true - yaw_pred), torch.cos(yaw_true - yaw_pred)))
+    numerator = torch.sqrt(torch.pow(torch.cos(pitch_pred)*torch.sin(delta_long), 2.0) + torch.pow(torch.cos(pitch_true)*torch.sin(pitch_pred)-torch.sin(pitch_true)*torch.cos(pitch_pred)*torch.cos(delta_long), 2.0))
+    denominator = torch.sin(pitch_true)*torch.sin(pitch_pred)+torch.cos(pitch_true)*torch.cos(pitch_pred)*torch.cos(delta_long)
+    great_circle_distance = torch.abs(torch.atan2(numerator, denominator))
+    return great_circle_distance
+
+def get_orthodromic_distance_cartesian(position_a, position_b,epsilon=1e-8):
+    # Transform into directional vector in Cartesian Coordinate System
+    # Transform into directional vector in Cartesian Coordinate System
+    norm_a = torch.sqrt(torch.square(position_a[..., 0:1]) + torch.square(position_a[..., 1:2])
+                        + torch.square(position_a[..., 2:3]))+epsilon
+    norm_b = torch.sqrt(torch.square(position_b[..., 0:1]) + torch.square(position_b[..., 1:2])
+                        + torch.square(position_b[..., 2:3]))+epsilon
+    x_true = position_a[..., 0:1] / norm_a
+    y_true = position_a[..., 1:2] / norm_a
+    z_true = position_a[..., 2:3] / norm_a
+    x_pred = position_b[..., 0:1] / norm_b
+    y_pred = position_b[..., 1:2] / norm_b
+    z_pred = position_b[..., 2:3] / norm_b
+    # Finally compute orthodromic distance
+    # great_circle_distance = np.arccos(x_true*x_pred+y_true*y_pred+z_true*z_pred)
+    # To keep the values in bound between -1 and 1
+    great_circle_distance = torch.acos(torch.clamp(x_true * x_pred + y_true * y_pred + z_true * z_pred, -1.0, 1.0))
+    return great_circle_distance
 
 class OrthDist(nn.Module):
     def __init__(self):

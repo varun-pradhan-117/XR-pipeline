@@ -5,7 +5,7 @@ import torch.nn.init as init
 import numpy as np
 from torchinfo import summary
 import os
-
+import matplotlib.pyplot as plt
 
 
 def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
@@ -38,7 +38,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             optimizer.zero_grad()
             #print(ip)
             ip=[t.squeeze(axis=1).float().to(device) for t in ip]
-            #print(ip)
+            
             targets=targets.squeeze(axis=1).float().to(device)
             #print(encoder_inputs)
             if model_name=='DVMS':
@@ -100,7 +100,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             for name,func in metric.items():
                 eval_metrics[name]=[]
         for ip,targets in validation_loader:
-            ip=(t.squeeze(axis=1).to(device) for t in ip)    
+            ip=[t.squeeze(axis=1).to(device) for t in ip]    
             targets=targets.squeeze(axis=1).to(device)     
             #print(encoder_inputs)
             if model_name=='DVMS':
@@ -145,8 +145,65 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
     return losses, val_losses
 
 
-def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None, metric=None):
+def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None, metric=None, model_name=None, K=None, vid_name=None):
     model.eval()
+    if vid_name is not None:
+        path=os.path.join(path,vid_name)
+    print(path)
+    if not os.path.isdir(path):
+        print(f"Making folder {path}")
+        os.makedirs(path)
+    eval_metrics={}
     if metric is not None:
         for name,func in metric.items():
             eval_metrics[name]=[]
+    for ip, targets in validation_loader:
+        ip=[t.squeeze(axis=1).to(device) for t in ip] 
+        targets=targets.squeeze(axis=1).to(device)  
+        #print(targets.shape)
+        if model_name=='DVMS':
+            prediction=model.sample(ip)
+            #print(prediction.shape)
+        else:
+            prediction=model(ip)
+        
+        #print(prediction.shape)
+
+        metric_val={}
+        if metric is not None:
+            for name,func in metric.items():
+                if model_name=='DVMS':
+                    metric_val=func(prediction.detach(),targets,k=K)
+                else:
+                    metric_val=func(prediction.detach(),targets).squeeze(-1)
+                eval_metrics[name].append(metric_val)
+                #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
+                #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
+                #metric_vals[name].append(metric_val)
+    for name in eval_metrics:
+        eval_metrics[name]=torch.cat(eval_metrics[name],dim=0).mean(dim=0).squeeze(-1)
+        # Save the metrics values to a file
+        metric_values = eval_metrics[name].cpu().numpy()
+        values_save_path = os.path.join(path, f'{name}_values.npy')
+        np.save(values_save_path, metric_values)
+        print(f"Saved metric values for {name} at {values_save_path}")
+
+        # Plot the metric and save the figure
+        timestamps = (np.arange(1, 26) / 5)  # [0.2, 0.4, ..., 5.0] assuming 5 fps
+        plt.figure(figsize=(10, 5))
+        plt.plot(timestamps, metric_values, marker='o', label=f'{name}')
+        plt.title(f'Metric: {name}')
+        plt.xlabel('Time (seconds)')
+        plt.ylabel(f'{name} Value')
+        plt.grid(True)
+        plt.legend()
+
+        # Save the plot
+        plot_save_path = os.path.join(path, f'{name}_plot.png')
+        plt.savefig(plot_save_path)
+        plt.close()
+        print(f"Saved plot for {name} at {plot_save_path}")
+    
+    
+    
+        

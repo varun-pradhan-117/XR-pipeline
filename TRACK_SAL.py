@@ -65,14 +65,14 @@ class TRACK_MODEL(nn.Module):
         out_enc_pos, (h_n_pos,c_n_pos)= self.pos_enc(encoder_pos_inputs)
         states_pos=[h_n_pos,c_n_pos]
         #out_enc_pos = self.dropout(out_enc_pos)
-        check_for_nans_or_infs(out_enc_pos, 'out_enc_pos')
+        #check_for_nans_or_infs(out_enc_pos, 'out_enc_pos')
         
         # Flatten saliency input
         flat_enc_sal_inputs = torch.flatten(encoder_sal_inputs, start_dim=-2)
         out_enc_sal, (h_n_sal,c_n_sal) = self.sal_enc(flat_enc_sal_inputs)
         states_sal=[h_n_sal,c_n_sal]
         #out_enc_sal = self.dropout(out_enc_sal)
-        check_for_nans_or_infs(out_enc_sal, 'out_enc_sal')
+        #check_for_nans_or_infs(out_enc_sal, 'out_enc_sal')
         
         # Concatenate encoder outputs
         #with torch.autograd.detect_anomaly():
@@ -80,8 +80,8 @@ class TRACK_MODEL(nn.Module):
         fuse_out_enc, (h_n_fuse,c_n_fuse) = self.fuse_1_enc(conc_out_enc)
         states_fuse=[h_n_fuse,c_n_fuse]
         #fuse_out_enc = self.dropout(fuse_out_enc)
-        check_for_nans_or_infs(conc_out_enc, 'conc_out_enc')
-        check_for_nans_or_infs(fuse_out_enc, 'fuse_out_enc')
+        #check_for_nans_or_infs(conc_out_enc, 'conc_out_enc')
+        #check_for_nans_or_infs(fuse_out_enc, 'fuse_out_enc')
         
         dec_input = decoder_pos_inputs
         all_pos_outputs = []
@@ -91,14 +91,14 @@ class TRACK_MODEL(nn.Module):
             dec_pos_out, (h_n_pos,c_n_pos)= self.pos_dec(dec_input,states_pos)
             states_pos=[h_n_pos,c_n_pos]
             #dec_pos_out = self.dropout(dec_pos_out)
-            check_for_nans_or_infs(dec_pos_out, 'dec_pos_out')
+            #check_for_nans_or_infs(dec_pos_out, 'dec_pos_out')
             
             # Decode saliency at current timestep
             selected_timestep_saliency = decoder_sal_inputs[:, t:t + 1]
             flatten_timestep_saliency = torch.flatten(selected_timestep_saliency, start_dim=-2)
             dec_sal_out, (h_n_sal,c_n_sal) = self.sal_dec(flatten_timestep_saliency, states_sal)
             states_sal=[h_n_sal,c_n_sal]
-            check_for_nans_or_infs(dec_sal_out, 'dec_sal_out')
+            #check_for_nans_or_infs(dec_sal_out, 'dec_sal_out')
             
             # Decode concatenated values
             #with torch.autograd.detect_anomaly():
@@ -106,8 +106,8 @@ class TRACK_MODEL(nn.Module):
             fuse_out_dec_1, (h_n_fuse, c_n_fuse) = self.fuse_1_dec(dec_out, states_fuse)
             states_fuse=[h_n_fuse,c_n_fuse]
             #fuse_out_dec_1 = self.dropout(fuse_out_dec_1)
-            check_for_nans_or_infs(dec_out, 'dec_out')
-            check_for_nans_or_infs(fuse_out_dec_1, 'fuse_out_dec_1')
+            #check_for_nans_or_infs(dec_out, 'dec_out')
+            #check_for_nans_or_infs(fuse_out_dec_1, 'fuse_out_dec_1')
             
             # FC layers
             dec_fuse_out = self.fc_1(fuse_out_dec_1)
@@ -116,9 +116,9 @@ class TRACK_MODEL(nn.Module):
             outputs_delta = self.fc_layer_out(dec_fuse_out)
             # Apply toposition
             decoder_pred=toPosition([dec_input,outputs_delta])
-            check_for_nans_or_infs(dec_fuse_out, 'dec_fuse_out')
-            check_for_nans_or_infs(outputs_delta, 'outputs_delta')
-            check_for_nans_or_infs(decoder_pred, 'decoder_pred')
+            #check_for_nans_or_infs(dec_fuse_out, 'dec_fuse_out')
+            #check_for_nans_or_infs(outputs_delta, 'outputs_delta')
+            #check_for_nans_or_infs(decoder_pred, 'decoder_pred')
             all_pos_outputs.append(decoder_pred)
             dec_input=decoder_pred
         #with torch.autograd.detect_anomaly():    
