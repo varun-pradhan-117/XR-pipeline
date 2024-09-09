@@ -1,5 +1,5 @@
 import numpy as np
-import cv2
+#import cv2
 from scipy import ndimage
 
 DEFAULT_GAMMA = 2.4
