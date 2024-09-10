@@ -29,6 +29,8 @@ parser = argparse.ArgumentParser(description='Process the input parameters to tr
 
 parser.add_argument('-train', action="store_true", dest='train_flag', help='Flag that tells if we will run the training procedure.')
 parser.add_argument('-evaluate', action="store_true", dest='evaluate_flag', help='Flag that tells if we will run the evaluation procedure.')
+parser.add_argument('-evaluate_old_vid', action="store_true", dest='evaluate_old_vid_flag', help='Flag that tells if we will run the evaluation procedure for previously seen videos.')
+parser.add_argument('-evaluate_old_user', action="store_true", dest='evaluate_old_user_flag', help='Flag that tells if we will run the evaluation procedure for previously seen user.')
 parser.add_argument('-evaluate_vid', action="store_true", dest='evaluate_vid_flag', help='Flag that tells if we will run the evaluation procedure per video.')
 parser.add_argument('-dataset_name', action='store', dest='dataset_name', help='The name of the dataset used to train this network.')
 parser.add_argument('-model_name', action='store', dest='model_name', help='The name of the model used to reference the network structure used.')
@@ -100,13 +102,17 @@ PERC_VIDEOS_TEST = 0.4
 PERC_USERS_TEST = 0.4
 BATCH_SIZE = 128
 TRAIN_MODEL = False
-EVALUATE_MODEL = False
+EVALUATE_MODEL,EVALUATE_OLD_VIDEOS,EVALUATE_VIDEOS, EVALUATE_OLD_USERS = False,False,False,False
 if args.train_flag:
     TRAIN_MODEL = True
 if args.evaluate_flag:
     EVALUATE_MODEL = True
 if args.evaluate_vid_flag:
     EVALUATE_VIDEOS=True
+if args.evaluate_old_vid_flag:
+    EVALUATE_OLD_VIDEOS=True    
+if args.evaluate_old_user_flag:
+    EVALUATE_OLD_USERS=True
 
 root_dataset_folder = os.path.join('/media/Blue2TB1', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
@@ -294,6 +300,37 @@ if __name__=='__main__':
         model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
         plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
+    if EVALUATE_OLD_VIDEOS:
+        test_data=PositionDataset(partitions['user_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+        test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
+        saved_models=os.listdir(model_save_path)
+        epoch_files=[f for f in saved_models if f.endswith('.pth')]
+        if not epoch_files:
+            raise FileNotFoundError("No saved models for given model name and dataset.")
+        epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
+        latest=max(epoch_numbers)
+        best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
+        model_data=torch.load(best_model,weights_only=False)
+        model.load_state_dict(model_data['model_state_dict'])
+        plot_path=os.path.join("New_User_TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
+    
+    if EVALUATE_OLD_USERS:
+        test_data=PositionDataset(partitions['video_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+        test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
+        saved_models=os.listdir(model_save_path)
+        epoch_files=[f for f in saved_models if f.endswith('.pth')]
+        if not epoch_files:
+            raise FileNotFoundError("No saved models for given model name and dataset.")
+        epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
+        latest=max(epoch_numbers)
+        best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
+        model_data=torch.load(best_model,weights_only=False)
+        model.load_state_dict(model_data['model_state_dict'])
+        plot_path=os.path.join("New_Video_TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
         
     if EVALUATE_VIDEOS:
