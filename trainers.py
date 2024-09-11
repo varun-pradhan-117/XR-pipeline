@@ -205,5 +205,69 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
         print(f"Saved plot for {name} at {plot_save_path}")
     
     
-    
+def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None,
+                  metric=None, model_name=None, K=None, vid_name=None, user_name=None):
+    model.eval()
+    if vid_name is not None:
+        path=os.path.join(path,vid_name,user_name)
+    print(path)
+    if not os.path.isdir(path):
+        print(f"Making folder {path}")
+        os.makedirs(path)
+    eval_metrics={}
+
+    indices={"next": 0, 1: 4, 2: 9, 3: 14, 4: 19, 5: 24} 
+    if metric is not None:
+        for name,func in metric.items():
+            eval_metrics[name]=[]
+    for ip, targets in validation_loader:
+        ip=[t.squeeze(axis=1).to(device) for t in ip] 
+        targets=targets.squeeze(axis=1).to(device)  
+        #print(targets.shape)
+        if model_name=='DVMS':
+            prediction=model.sample(ip)
+            #print(prediction.shape)
+        else:
+            prediction=model(ip)
+        
+        #print(prediction.shape)
+
+        metric_val={}
+        if metric is not None:
+            for name,func in metric.items():
+                if model_name=='DVMS':
+                    metric_val=func(prediction.detach(),targets,k=K)
+                else:
+                    metric_val=func(prediction.detach(),targets).squeeze(-1)
+                
+                eval_metrics[name].append(metric_val)
+                #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
+                #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
+                #metric_vals[name].append(metric_val)
+    for name in eval_metrics:
+        all_metrics=torch.cat(eval_metrics[name],dim=0)
+        #print(eval_metrics[name].shape)
+        for time,idx in indices.items():
+            specific_values = all_metrics[:, idx].cpu().numpy()
+
+            # Save the metrics values to a file
+            values_save_path = os.path.join(path, f'{name}_{time}_values.npy')
+            np.save(values_save_path, specific_values)
+            print(f"Saved metric values for {name} and timestep {time} at {values_save_path}")
+
+            # Plot the metric and save the figure
+            """ timestamps = (np.arange(1, 26) / 5)  # [0.2, 0.4, ..., 5.0] assuming 5 fps
+            plt.figure(figsize=(10, 5))
+            plt.plot(timestamps, metric_values, marker='o', label=f'{name}')
+            plt.title(f'Metric: {name}')
+            plt.xlabel('Time (seconds)')
+            plt.ylabel(f'{name} Value')
+            plt.grid(True)
+            plt.legend()
+
+            # Save the plot
+            plot_save_path = os.path.join(path, f'{name}_plot.png')
+            plt.savefig(plot_save_path)
+            plt.close()
+            print(f"Saved plot for {name} at {plot_save_path}") """
         

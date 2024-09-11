@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader
 from Utils import cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics
 from sklearn.model_selection import train_test_split
 import pandas as pd
+import csv
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.model_selection import train_test_split
@@ -158,7 +159,7 @@ def save_unique_videos_to_csv(unique_videos, output_csv_path):
         print(f"Unique videos saved to {output_csv_path}")
         
 class PositionDataset(Dataset):
-    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None, video_name=None):
+    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None, video_name=None, user_name=None):
         self.list_IDs=list_IDs
         self.all_saliencies=all_saliencies
         self.all_traces=all_traces
@@ -166,9 +167,13 @@ class PositionDataset(Dataset):
         self.M_WINDOW=M_WINDOW
         self.model_name=model_name
         self.future_window=future_window
+        self.user_name=user_name
         # Filter list_IDs by video_name if specified
         if video_name is not None:
             self.list_IDs = [ID for ID in self.list_IDs if ID['video'] == video_name]
+        # If user_random is True, select 5 random users
+        if self.user_name is not None:
+            self.list_IDs = [ID for ID in self.list_IDs if ID['user'] == user_name]
         
     def __len__(self):
         return len(self.list_IDs)

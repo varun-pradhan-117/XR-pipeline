@@ -6,13 +6,14 @@ from torchinfo import summary
 import os
 import sys
 import csv
+import random
 import argparse
 
 from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
 #from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv
-from trainers import train_model, test_model
+from trainers import train_model, test_model, test_full_vid
 import TRACK_POS, TRACK_SAL, DVMS
 
 
@@ -32,6 +33,7 @@ parser.add_argument('-evaluate', action="store_true", dest='evaluate_flag', help
 parser.add_argument('-evaluate_old_vid', action="store_true", dest='evaluate_old_vid_flag', help='Flag that tells if we will run the evaluation procedure for previously seen videos.')
 parser.add_argument('-evaluate_old_user', action="store_true", dest='evaluate_old_user_flag', help='Flag that tells if we will run the evaluation procedure for previously seen user.')
 parser.add_argument('-evaluate_vid', action="store_true", dest='evaluate_vid_flag', help='Flag that tells if we will run the evaluation procedure per video.')
+parser.add_argument('-evaluate_full_vid', action="store_true", dest='evaluate_full_vid_flag', help='Flag that tells if we will run the evaluation procedure over the entire video.')
 parser.add_argument('-dataset_name', action='store', dest='dataset_name', help='The name of the dataset used to train this network.')
 parser.add_argument('-model_name', action='store', dest='model_name', help='The name of the model used to reference the network structure used.')
 parser.add_argument('-init_window', action='store', dest='init_window', help='(Optional) Initial buffer window (to avoid stationary part).', type=int)
@@ -101,8 +103,9 @@ RATE = 0.2
 PERC_VIDEOS_TEST = 0.4
 PERC_USERS_TEST = 0.4
 BATCH_SIZE = 128
+
 TRAIN_MODEL = False
-EVALUATE_MODEL,EVALUATE_OLD_VIDEOS,EVALUATE_VIDEOS, EVALUATE_OLD_USERS = False,False,False,False
+EVALUATE_MODEL,EVALUATE_OLD_VIDEOS,EVALUATE_VIDEOS, EVALUATE_OLD_USERS, EVALUATE_FULL_VIDEOS = False,False,False,False,False
 if args.train_flag:
     TRAIN_MODEL = True
 if args.evaluate_flag:
@@ -113,6 +116,8 @@ if args.evaluate_old_vid_flag:
     EVALUATE_OLD_VIDEOS=True    
 if args.evaluate_old_user_flag:
     EVALUATE_OLD_USERS=True
+if args.evaluate_full_vid_flag:
+    EVALUATE_FULL_VIDEOS=True
 
 root_dataset_folder = os.path.join('/media/Blue2TB1', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
@@ -277,7 +282,10 @@ if __name__=='__main__':
     if TRAIN_MODEL:
         train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                    all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
-        train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=0)
+        train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=4)
+        test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+        test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
         if model_name in ['pos_only','DVMS','TRACK']:
             losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,
                                         device=device,path=model_save_path, tolerance=10, model_name=model_name)
@@ -300,7 +308,8 @@ if __name__=='__main__':
         model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
         plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
-        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
+                   metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
     if EVALUATE_OLD_VIDEOS:
         test_data=PositionDataset(partitions['user_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
@@ -315,7 +324,8 @@ if __name__=='__main__':
         model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
         plot_path=os.path.join("New_User_TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
-        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
+                   metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
     
     if EVALUATE_OLD_USERS:
         test_data=PositionDataset(partitions['video_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
@@ -331,7 +341,8 @@ if __name__=='__main__':
         model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
         plot_path=os.path.join("New_Video_TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
-        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
+        test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
+                   metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
         
     if EVALUATE_VIDEOS:
         saved_models=os.listdir(model_save_path)
@@ -347,6 +358,34 @@ if __name__=='__main__':
         print(*test_vids)
         plot_path=os.path.join("Test_vid_plots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
-            test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video)
+            test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video)
             test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
-            test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video)
+            test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
+                       metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video)
+        
+    if EVALUATE_FULL_VIDEOS:
+        saved_models=os.listdir(model_save_path)
+        epoch_files=[f for f in saved_models if f.endswith('.pth')]
+        if not epoch_files:
+            raise FileNotFoundError("No saved models for given model name and dataset.")
+        epoch_numbers=[int(f.split('_')[1].split('.')[0]) for f in epoch_files]
+        latest=max(epoch_numbers)
+        best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
+        model_data=torch.load(best_model,weights_only=False)
+        model.load_state_dict(model_data['model_state_dict'])
+        test_vids=[vid[0] for vid in test_vids]
+        print(*test_vids)
+        plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        for video in test_vids:
+            user_list=[trace[0] for trace in test_traces if trace[1]==video]
+            random_users=random.sample(user_list,3)
+            print(random_users)
+            for user in random_users:
+                test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
+                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video, user_name=user)
+                test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)   
+                test_full_vid(model=model,validation_loader=test_loader,criterion=criterion,device=device,
+                        metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video, user_name=user)
+
+            
