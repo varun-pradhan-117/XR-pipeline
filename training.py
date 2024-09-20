@@ -379,13 +379,12 @@ if __name__=='__main__':
         plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
             user_list=[trace[0] for trace in test_traces if trace[1]==video]
-            random_users=random.sample(user_list,3)
-            print(random_users)
-            for user in random_users:
+            for user in user_list:
                 test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                       all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video, user_name=user)
                 test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)   
                 test_full_vid(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                         metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video, user_name=user)
+            print(f"Saved files for {video} with {len(user_list)} users.")
 
             
