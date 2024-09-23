@@ -66,3 +66,12 @@ def store_frames(video_path,output_folder,fps=None,rescale=2):
     np.save(f'{output_folder}/sampled_video.npy',frames)
     np.save(f'{output_folder}/timestamps.npy',timestamps)
     print(len(timestamps))
+
+
+def store_instant_vel(data_folder, dataset):
+    data_path=os.path.join(data_folder, dataset,'video_data')
+    videos=os.listdir(data_path)
+    for video in videos:
+        unit_vectors=np.load(os.path.join(data_path,video,f'{video}_unit_vectors.npy'))
+        ivs=np.diff(unit_vectors,axis=1)
+        np.save(os.path.join(data_path,video, f'{video}_instantaneous_velocities.npy'), ivs)
