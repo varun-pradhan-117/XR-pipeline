@@ -14,7 +14,7 @@ from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_i
 from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv
 from trainers import train_model, test_model, test_full_vid
-import TRACK_POS, TRACK_SAL, DVMS
+import TRACK_POS, TRACK_SAL, DVMS, VPT360
 
 
 
@@ -164,6 +164,12 @@ if model_name=='DVMS':
     model,optimizer,criterion=DVMS.create_DVMS_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,
                                                      K=K,device=device)
     eval_metrics['orth_dist']=DVMS.flat_top_k_orth_dist
+if model_name == 'VPT360':
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, f'VPT360/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, f'VPT360/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
+    model,optimizer,criterion=VPT360.create_VPT360_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
+    eval_metrics['orth_dist']=get_orthodromic_distance_cartesian
+    eval_metrics['combinatorial_loss']=criterion
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -249,7 +255,6 @@ if __name__=='__main__':
     all_traces = {}
     for video in videos:
         all_traces[video] = read_sampled_unit_vectors_by_users(VIDEO_DATA_FOLDER, video,users_per_video[video])
-
     #print(users_per_video[videos[0]])        
     #print(all_traces[videos[0]][users_per_video[videos[0]][0]])
     #print(all_traces['coaster']['user21'].shape)
@@ -257,7 +262,7 @@ if __name__=='__main__':
 
 
     all_saliencies = {}
-    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS']:
+    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -270,9 +275,11 @@ if __name__=='__main__':
 
     
     
-    
+
     if model_name in ['TRACK', 'DVMS']:
         metrics = {"orth_dist": MetricOrthLoss}
+    if model_name in ['VPT360']:
+        metrics= eval_metrics
     else:
         metrics=None
     EPOCHS=500
@@ -286,9 +293,11 @@ if __name__=='__main__':
         test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
-        if model_name in ['pos_only','DVMS','TRACK']:
-            losses,val_losses=train_model(model,train_loader,test_loader,optimizer,criterion,epochs=EPOCHS,
-                                        device=device,path=model_save_path, tolerance=10, model_name=model_name)
+        if model_name in ['pos_only','DVMS','TRACK','VPT360']:
+            losses,val_losses=train_model(model=model,train_loader=train_loader,
+                                          validation_loader=test_loader,
+                                          optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
+                                        device=device,path=model_save_path, tolerance=20, model_name=model_name)
             print(f"Final Loss:{losses[-1]:.4f}")
             if not os.path.exists(os.path.join('Losses',dataset_name)):
                 os.makedirs(os.path.join('Losses',dataset_name))

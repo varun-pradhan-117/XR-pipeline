@@ -6,6 +6,7 @@ import numpy as np
 from torchinfo import summary
 import os
 import matplotlib.pyplot as plt
+from Utils import get_velocities
 
 
 def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
@@ -23,16 +24,15 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
     last_saved=0
     epoch_losses={}
     metric_vals={}
-    if metric is not None:
-        for name,func in metric.items():
-            metric_vals[name]={}
+    
     for epoch in range(epochs):
         model.train()
         epoch_losses[epoch]=[]
         #print(model.state_dict())
+        metric_vals[epoch]={}
         if metric is not None:
             for name,func in metric.items():
-                metric_vals[name][epoch]=[]
+                metric_vals[epoch][name]=[]
         metric_val={}
         for idx,(ip,targets) in enumerate(train_loader):
             optimizer.zero_grad()
@@ -46,16 +46,26 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                loss=criterion(prediction,targets)
-                
+                if model_name in ['VPT360']:
+                    pred_vels=get_velocities(ip[0],prediction)
+                    target_vels=get_velocities(ip[0],targets)
+                    
+                    loss=criterion(prediction,targets,pred_vels,target_vels)
+                else:
+                    loss=criterion(prediction,targets)
             loss.backward()
             
             
             
             if metric is not None:
                 for name,func in metric.items():
-                    metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
-                    metric_vals[epoch].append(metric_val)
+                    if name=='combinatorial_loss':
+                        pred_vels=get_velocities(ip[0],prediction.detach())
+                        target_vels=get_velocities(ip[0],targets.detach())
+                        metric_val[name]=torch.mean(func(prediction.detach(),targets,pred_vels,target_vels)).item()
+                    else:
+                        metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
+                    metric_vals[epoch][name].append(metric_val[name])
             #prev_grads={name: param.grad for name, param in model.named_parameters() if param.grad is not None}
                     
             # Check for NaN loss
@@ -88,8 +98,9 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
         epoch_loss=sum(epoch_losses[epoch])/len(epoch_losses[epoch])
         losses.append(epoch_loss)
         print(f"Epoch {epoch+1}/{epochs}, Train Loss:{epoch_loss:.4f}",end=' ')
-        for name, value_list in metric_vals.items():
-                print(f" - {name}: {torch.mean(value_list):.4f}")
+        #print(metric_vals)
+        for name, value_list in metric_vals[epoch].items():
+                print(f" - {name}: {np.mean(value_list):.4f}")
                 
                 
                 
@@ -108,22 +119,33 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                loss=criterion(prediction,targets)
+                if model_name in ['VPT360']:
+                    pred_vels=get_velocities(ip[0],prediction)
+                    target_vels=get_velocities(ip[0],targets)
+                    
+                    loss=criterion(prediction,targets,pred_vels,target_vels)
+                else:
+                    loss=criterion(prediction,targets)
             #print("-------")
             #print(model.state_dict())
             #return 0
             if metric is not None:
                 for name,func in metric.items():
-                    metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
-                    metric_vals[name].append(metric_val)
+                    if name=='combinatorial_loss':
+                        pred_vels=get_velocities(ip[0],prediction.detach())
+                        target_vels=get_velocities(ip[0],targets.detach())
+                        metric_val[name]=torch.mean(func(prediction.detach(),targets,pred_vels,target_vels)).item()
+                    else:
+                        metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
+                    eval_metrics[name].append(metric_val[name])
             epoch_val_losses.append(loss.item())
         epoch_val_loss=sum(epoch_val_losses)/len(epoch_val_losses)
         val_losses.append(epoch_val_loss)
 
         print(f"Epoch {epoch+1}/{epochs}, Train Loss:{epoch_loss:.4f}, Validation Loss:{epoch_val_loss:.4f}",end=' ')
         if metric is not None:
-            for name, value_list in metric_vals.items():
-                print(f" - {name}: {torch.mean(value_list):.4f}",end=' ')
+            for name, value_list in eval_metrics.items():
+                print(f" - {name}: {np.mean(value_list):.4f}",end=' ')
         print()    
         last_saved+=1
         if epoch_val_loss<best_val_loss:

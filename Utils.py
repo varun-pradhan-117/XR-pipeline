@@ -271,7 +271,18 @@ def store_list_as_csv(csv_file,csv_columns,list_data):
             writer.writerows(list_data)
     except IOError:
         print("I/O error")
-            
+
+def get_velocities(input,output):
+    p0=input[:,-1,:]
+    v_1=output[:,0,:]-p0
+    v_1=torch.norm(v_1,dim=-1,keepdim=True)
+    output_diff=output[:,1:,:]-output[:,:-1,:]
+    output_vels=torch.norm(output_diff,dim=-1)
+    output_vels=torch.cat((v_1,output_vels),dim=1)
+    return output_vels
+    
+    
+
 all_metrics = {}
 all_metrics['orthodromic'] = MetricOrthLoss
 all_metrics['mse'] = compute_mse

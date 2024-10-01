@@ -190,7 +190,7 @@ class PositionDataset(Dataset):
         decoder_sal_inputs_for_batch = []
         decoder_outputs_for_batch = []
         
-        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS']:
+        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360']:
             encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
@@ -199,6 +199,9 @@ class PositionDataset(Dataset):
         elif self.model_name == 'MM18':
             encoder_sal_inputs_for_batch.append(torch.cat((self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1], self.all_headmaps[video][user][tstamp-self.M_WINDOW+1:tstamp+1]), dim=1))
             decoder_outputs_for_batch.append(self.all_headmaps[video][user][tstamp+self.future_window+1])
+        elif self.model_name in ['VPT360']:
+            encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
+            decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
         else:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
             decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
@@ -214,6 +217,9 @@ class PositionDataset(Dataset):
                     torch.tensor(encoder_sal_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+        elif self.model_name in ['VPT360']:
+            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+                    
         elif self.model_name == 'CVPR18':
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
