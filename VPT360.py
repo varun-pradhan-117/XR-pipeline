@@ -1,9 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
+
 import torch.nn.init as init
 import torch.nn.functional as F
-
+from torchviz import make_dot
+import torch.optim as optim
+from Utils import MetricOrthLoss, get_orthodromic_distance_cartesian
+import sys
 
 class PositionalEncoding(nn.Module):
     def __init__(self,d_model,max_len=1000):
@@ -57,8 +60,19 @@ class CombinationLoss(nn.Module):
         self.beta=beta
     
     def forward(self,pred_pos,true_pos,pred_vel,true_vel):
+        #print(pred_pos.shape)
+        #print(true_pos.shape)
         mse_pos=F.mse_loss(pred_pos,true_pos)
+        #print(mse_pos)
+        pos_loss=MetricOrthLoss(pred_pos,true_pos)
+        #print(pos_loss)
+        #print(mse_pos)
+        #print(mse_pos.shape)
+        #print(pos_loss.shape)
         mse_vel = F.mse_loss(pred_vel, true_vel)
+        #print(mse_vel)
+        #print(mse_vel.shape)
+        #sys.exit()
         return self.alpha*mse_pos + self.beta*mse_vel
         
 def create_VPT360_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=2e-7,hidden_size=512,num_heads=8,num_layers=1,max_len=1000,dropout=0.1, device='cpu'):
@@ -71,8 +85,12 @@ def create_VPT360_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=2e-7,hidden_size=
 
 if __name__=="__main__":
     d_model=128
-    past_vp=torch.randn(32,5,2)
-    model=VPT360(M_WINDOW=5,H_WINDOW=25,hidden_size=d_model,input_dim=2)
+    past_vp=torch.randn(1,32,5,2)
+    model=VPT360(M_WINDOW=5,H_WINDOW=25,hidden_size=d_model,input_dim=2, num_layers=1,max_len=200)
     pred=model(past_vp)
-    print(pred.shape)
+    #dot=make_dot(pred,params=dict(model.named_parameters()))
+    #dot.format = 'png'  # Optional: set the format to PNG
+    #dot.render("network_visualization") 
+    
+    #print(pred.shape)
     

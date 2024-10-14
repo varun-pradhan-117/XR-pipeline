@@ -5,6 +5,7 @@ import torch.nn.init as init
 import numpy as np
 from torchinfo import summary
 import os
+import shutil
 import matplotlib.pyplot as plt
 from Utils import get_velocities
 
@@ -12,6 +13,11 @@ from Utils import get_velocities
 def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
     best_val_loss=float('inf')
     device=torch.device(device)
+    if os.path.isdir(path):
+        print(f"Clearing contents of the existing folder: {path}")
+        shutil.rmtree(path)  # Deletes all contents in the folder
+        print(f"Creating folder: {path}")
+        os.makedirs(path)
     if not os.path.isdir(path):
         print(f"Making folder {path}")
         os.makedirs(path)
@@ -38,7 +44,6 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             optimizer.zero_grad()
             #print(ip)
             ip=[t.squeeze(axis=1).float().to(device) for t in ip]
-            
             targets=targets.squeeze(axis=1).float().to(device)
             #print(encoder_inputs)
             if model_name=='DVMS':
@@ -46,11 +51,24 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                if model_name in ['VPT360']:
+                
+                if model_name in ['VPT360','AMH']:
+                    norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
+                    prediction = prediction / norm 
+                    """ magnitude=torch.norm(prediction,dim=-1)
+                    is_unit_vector = torch.allclose(magnitude, torch.ones_like(magnitude), atol=1e-6)
+
+                    # Print the results
+                    print("Magnitude of predictions:", magnitude.shape)
+                    print("Are predictions unit vectors?:", is_unit_vector)
+                    return """
                     pred_vels=get_velocities(ip[0],prediction)
                     target_vels=get_velocities(ip[0],targets)
                     
                     loss=criterion(prediction,targets,pred_vels,target_vels)
+                    #print(criterion)
+                    #print(loss)
+                    #return
                 else:
                     loss=criterion(prediction,targets)
             loss.backward()
@@ -119,7 +137,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                if model_name in ['VPT360']:
+                if model_name in ['VPT360','AMH']:
                     pred_vels=get_velocities(ip[0],prediction)
                     target_vels=get_velocities(ip[0],targets)
                     

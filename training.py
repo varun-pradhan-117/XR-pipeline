@@ -12,9 +12,9 @@ import argparse
 from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
 #from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
-from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv
+from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv, fetch_entropies
 from trainers import train_model, test_model, test_full_vid
-import TRACK_POS, TRACK_SAL, DVMS, VPT360
+import TRACK_POS, TRACK_SAL, DVMS, VPT360, adaptiveMultiHead
 
 
 
@@ -118,7 +118,7 @@ if args.evaluate_old_user_flag:
     EVALUATE_OLD_USERS=True
 if args.evaluate_full_vid_flag:
     EVALUATE_FULL_VIDEOS=True
-
+root_folder='/media/Blue2TB1'
 root_dataset_folder = os.path.join('/media/Blue2TB1', dataset_name)
 EXP_NAME=f"_init_{INIT_WINDOW}_in_{M_WINDOW}_out_{H_WINDOW}_end_{END_WINDOW}"
 SAMPLED_DATASET_FOLDER=os.path.join(root_dataset_folder,'sampled_dataset')
@@ -168,7 +168,14 @@ if model_name == 'VPT360':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, f'VPT360/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, f'VPT360/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
     model,optimizer,criterion=VPT360.create_VPT360_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
-    eval_metrics['orth_dist']=get_orthodromic_distance_cartesian
+    eval_metrics['orth_dist']=MetricOrthLoss
+    eval_metrics['combinatorial_loss']=criterion
+    
+if model_name == "AMH":
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, f'AMH/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, f'AMH/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
+    model,optimizer,criterion=adaptiveMultiHead.create_AMH_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, full_vec=True)
+    eval_metrics['orth_dist']=MetricOrthLoss
     eval_metrics['combinatorial_loss']=criterion
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
@@ -262,7 +269,7 @@ if __name__=='__main__':
 
 
     all_saliencies = {}
-    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360']:
+    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360','AMH']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -271,7 +278,9 @@ if __name__=='__main__':
             for video in videos:
                 print(f"Loading {video} saliencies")
                 all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
-
+    IEs={}
+    if model_name in  ['AMH']:
+        _,_,IEs=fetch_entropies(root_folder,dataset_name)
 
     
     
@@ -288,12 +297,14 @@ if __name__=='__main__':
     #torch.autograd.set_detect_anomaly(True)
     if TRAIN_MODEL:
         train_data=PositionDataset(partitions['train'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
+                                   all_IEs=IEs)
         train_loader=DataLoader(train_data,batch_size=BATCH_SIZE,shuffle=True, pin_memory=True, num_workers=4)
         test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
+                                  all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
-        if model_name in ['pos_only','DVMS','TRACK','VPT360']:
+        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
@@ -305,7 +316,8 @@ if __name__=='__main__':
     
     if EVALUATE_MODEL:
         test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
+                                  all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
         saved_models=os.listdir(model_save_path)
         epoch_files=[f for f in saved_models if f.endswith('.pth')]
@@ -321,7 +333,8 @@ if __name__=='__main__':
                    metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
     if EVALUATE_OLD_VIDEOS:
         test_data=PositionDataset(partitions['user_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
+                                  all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
         saved_models=os.listdir(model_save_path)
         epoch_files=[f for f in saved_models if f.endswith('.pth')]
@@ -338,7 +351,8 @@ if __name__=='__main__':
     
     if EVALUATE_OLD_USERS:
         test_data=PositionDataset(partitions['video_test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies)
+                                  all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
+                                  all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
         saved_models=os.listdir(model_save_path)
         epoch_files=[f for f in saved_models if f.endswith('.pth')]
@@ -368,7 +382,8 @@ if __name__=='__main__':
         plot_path=os.path.join("Test_vid_plots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
             test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video)
+                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video,
+                                      all_IEs=IEs)
             test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)
             test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                        metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video)
@@ -390,7 +405,8 @@ if __name__=='__main__':
             user_list=[trace[0] for trace in test_traces if trace[1]==video]
             for user in user_list:
                 test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
-                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video, user_name=user)
+                                      all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video, user_name=user,
+                                      all_IEs=IEs)
                 test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)   
                 test_full_vid(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                         metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video, user_name=user)

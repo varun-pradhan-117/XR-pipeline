@@ -56,6 +56,27 @@ def reshape_ip(input):
     input=[ip.squeeze(dim=1) for ip in input]
     return input
 
+def fetch_entropies(datasets_folder,dataset):
+    dataset_folder = os.path.join(datasets_folder, dataset)
+    data_path = os.path.join(dataset_folder, 'video_data')
+    videos = os.listdir(data_path)
+    entropies={}
+    aes={}
+    IEs={}
+    for video in videos:
+        entropy_path = os.path.join(data_path, video, f'{video}_content_entropy.npy')
+        ae_path=os.path.join(data_path,video, f'{video}_AEs.npy')
+        IE_path=os.path.join(data_path, video, f'{video}_IEs.npy')
+        users=np.load(os.path.join(data_path, video, f'{video}_users.npy'))
+        entropy=np.load(entropy_path)
+        ae=np.load(ae_path)
+        ie=np.load(IE_path)
+        entropies[video]=entropy
+        aes[video]=ae
+        IEs[video]={user:ie_values for user, ie_values in zip(users,ie)}
+    return entropies,aes,IEs
+
+
 def get_trace_pairs(users_per_video,video_list,user_list):
     trace_pairs=[]
     for video in video_list:
@@ -159,7 +180,8 @@ def save_unique_videos_to_csv(unique_videos, output_csv_path):
         print(f"Unique videos saved to {output_csv_path}")
         
 class PositionDataset(Dataset):
-    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_headmaps=None, video_name=None, user_name=None):
+    def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_IEs=None,
+                 all_headmaps=None, video_name=None, user_name=None):
         self.list_IDs=list_IDs
         self.all_saliencies=all_saliencies
         self.all_traces=all_traces
@@ -168,6 +190,7 @@ class PositionDataset(Dataset):
         self.model_name=model_name
         self.future_window=future_window
         self.user_name=user_name
+        self.all_IEs=all_IEs
         # Filter list_IDs by video_name if specified
         if video_name is not None:
             self.list_IDs = [ID for ID in self.list_IDs if ID['video'] == video_name]
@@ -189,8 +212,9 @@ class PositionDataset(Dataset):
         decoder_pos_inputs_for_batch = []
         decoder_sal_inputs_for_batch = []
         decoder_outputs_for_batch = []
-        
-        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360']:
+        encoder_ent_inputs_for_batch=[]
+        decoder_ent_inputs_for_batch=[]
+        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360','AMH']:
             encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
@@ -202,6 +226,16 @@ class PositionDataset(Dataset):
         elif self.model_name in ['VPT360']:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
             decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
+        elif self.model_name in ['AMH']:
+            encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
+            decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
+            encoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp-self.M_WINDOW:tstamp])
+        elif self.model_name in ['AH']:
+            encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
+            encoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp-self.M_WINDOW:tstamp])
+            decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
+            decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp+1:tstamp+self.future_window+1])
+            decoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp:tstamp+self.future_window+1])
         else:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
             decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
@@ -212,6 +246,8 @@ class PositionDataset(Dataset):
         decoder_pos_inputs_for_batch=np.array(decoder_pos_inputs_for_batch)
         decoder_sal_inputs_for_batch=np.array(decoder_sal_inputs_for_batch)
         decoder_outputs_for_batch=np.array(decoder_outputs_for_batch)
+        encoder_ent_inputs_for_batch=np.array(encoder_ent_inputs_for_batch)
+        decoder_ent_inputs_for_batch=np.array(decoder_ent_inputs_for_batch)
         if self.model_name == 'TRACK' or self.model_name == 'TRACK_AblatSal' or self.model_name == 'TRACK_AblatFuse':
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(encoder_sal_inputs_for_batch,dtype=torch.float32), 
@@ -219,7 +255,16 @@ class PositionDataset(Dataset):
                     torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name in ['VPT360']:
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
-                    
+        elif self.model_name in ['AMH']:
+            return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32),
+                    torch.tensor(encoder_ent_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
+        elif self.model_name in ['AH']:
+            return [
+                torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32),
+                torch.tensor(encoder_ent_inputs_for_batch,dtype=torch.float32),
+                torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32),
+                torch.tensor(decoder_ent_inputs_for_batch,dtype=torch.float32)
+            ], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
         elif self.model_name == 'CVPR18':
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32), 
                     torch.tensor(decoder_pos_inputs_for_batch,dtype=torch.float32), 
