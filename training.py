@@ -287,7 +287,7 @@ if __name__=='__main__':
 
     if model_name in ['TRACK', 'DVMS']:
         metrics = {"orth_dist": MetricOrthLoss}
-    if model_name in ['VPT360']:
+    if model_name in ['VPT360','AMH']:
         metrics= eval_metrics
     else:
         metrics=None

@@ -39,7 +39,6 @@ class AdaptiveMultiHeadAttention(nn.Module):
         else:
             self.W_e=nn.Parameter(torch.randn(1))
         
-        
         self.attention_dropout=nn.Dropout(dropout)
         self.output_dropout=nn.Dropout(dropout)
         self.fc=nn.Linear(num_heads * self.d_k, d_model)
