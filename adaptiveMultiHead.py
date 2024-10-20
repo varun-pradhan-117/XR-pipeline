@@ -115,7 +115,6 @@ class AMH(nn.Module):
     def forward(self, ip):
         x = ip[0]
         entropy=ip[1]
-        
         batch_size, seq_len, _ = x.shape
         x = self.input_embedding(x)
         x = self.pos_encoder(x)

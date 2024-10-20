@@ -14,7 +14,7 @@ from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_i
 from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
 from data_utils import fan_nossdav_split, PositionDataset, split_data_all_users, save_unique_videos_to_csv, fetch_entropies
 from trainers import train_model, test_model, test_full_vid
-import TRACK_POS, TRACK_SAL, DVMS, VPT360, adaptiveMultiHead
+import TRACK_POS, TRACK_SAL, DVMS, VPT360, adaptiveMultiHead, AdaptiveLSTM
 
 
 
@@ -177,6 +177,12 @@ if model_name == "AMH":
     model,optimizer,criterion=adaptiveMultiHead.create_AMH_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, full_vec=True)
     eval_metrics['orth_dist']=MetricOrthLoss
     eval_metrics['combinatorial_loss']=criterion
+if model_name == "ALSTM":
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
+    model,optimizer,criterion=AdaptiveLSTM.create_ALSTM_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
+    eval_metrics['orth_dist']=MetricOrthLoss
+    #eval_metrics['combinatorial_loss']=criterion
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'TRACK_AblatSal/Results_EncDec_3DCoords_TrueSal' + EXP_NAME)
@@ -202,6 +208,11 @@ elif model_name == 'pos_only':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Models_EncDec_eulerian' + EXP_NAME)
     model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
+    eval_metrics['orth_dist']=get_orthodromic_distance_euler
+elif model_name == 'pos_only_augmented':
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_augment/Results_EncDec_eulerian' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_augment/Models_EncDec_eulerian' + EXP_NAME)
+    model,optimizer,criterion=TRACK_POS.create_pos_only_augmented_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, input_size=3)
     eval_metrics['orth_dist']=get_orthodromic_distance_euler
 elif model_name == 'pos_only_3d_loss':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_3d_loss/Results_EncDec_eulerian' + EXP_NAME)
@@ -269,7 +280,8 @@ if __name__=='__main__':
 
 
     all_saliencies = {}
-    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360','AMH']:
+    if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360','AMH','pos_only_augmented',
+                          'ALSTM']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -279,7 +291,7 @@ if __name__=='__main__':
                 print(f"Loading {video} saliencies")
                 all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
     IEs={}
-    if model_name in  ['AMH']:
+    if model_name in  ['AMH','pos_only_augmented','ALSTM']:
         _,_,IEs=fetch_entropies(root_folder,dataset_name)
 
     
@@ -287,7 +299,7 @@ if __name__=='__main__':
 
     if model_name in ['TRACK', 'DVMS']:
         metrics = {"orth_dist": MetricOrthLoss}
-    if model_name in ['VPT360','AMH']:
+    if model_name in ['VPT360','AMH','ALSTM']:
         metrics= eval_metrics
     else:
         metrics=None
@@ -304,7 +316,7 @@ if __name__=='__main__':
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
                                   all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
-        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH']:
+        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
@@ -313,7 +325,11 @@ if __name__=='__main__':
             if not os.path.exists(os.path.join('Losses',dataset_name)):
                 os.makedirs(os.path.join('Losses',dataset_name))
             torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
-    
+    eval_metrics={}
+    if model_name in ['pos_only','pos_only_augmented']:
+        eval_metrics['orth_dist']=get_orthodromic_distance_euler
+    else:
+        eval_metrics['orth_dist']=MetricOrthLoss
     if EVALUATE_MODEL:
         test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,

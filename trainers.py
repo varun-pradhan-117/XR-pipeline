@@ -51,7 +51,9 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                
+                if model_name in ['TRACK_SAL','ALSTM']:
+                    norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
+                    prediction = prediction / norm 
                 if model_name in ['VPT360','AMH']:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
@@ -137,7 +139,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
+                if model_name in ['TRACK_SAL','ALSTM']:
+                    norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
+                    prediction = prediction / norm 
                 if model_name in ['VPT360','AMH']:
+                    norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
+                    prediction = prediction / norm 
                     pred_vels=get_velocities(ip[0],prediction)
                     target_vels=get_velocities(ip[0],targets)
                     

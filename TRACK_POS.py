@@ -34,8 +34,12 @@ def to_position(inputs,outputs_delta,outputs_delta_dir):
     return torch.cat([yaw_pred, pitch_pred], -1)
 
 class TRACK_POS(nn.Module):
-    def __init__(self,M_WINDOW,H_WINDOW,input_size=2,hidden_size=1024):
+    def __init__(self,M_WINDOW,H_WINDOW,input_size=2,hidden_size=1024, output_size=None):
         super().__init__()
+        if output_size:
+            self.output_size=output_size
+        else:
+            self.output_size=input_size
         self.lstm_layer=nn.LSTM(input_size,hidden_size=hidden_size,batch_first=True)
         self.decoder_dense_mot=nn.Linear(hidden_size,2)
         self.decoder_dense_dir=nn.Linear(hidden_size,2)
@@ -47,7 +51,46 @@ class TRACK_POS(nn.Module):
         encoder_outputs,states=self.lstm_layer(encoder_inputs)
         all_outputs=[]
         inputs=decoder_inputs
+
         for _ in range(self.output_horizon):
+            decoder_output,states=self.lstm_layer(inputs,states)
+            outputs_delta=self.decoder_dense_mot(decoder_output)
+            outputs_delta_dir=self.decoder_dense_dir(decoder_output)
+            outputs_pos=to_position(inputs,outputs_delta,outputs_delta_dir)
+            all_outputs.append(outputs_pos)
+            inputs=outputs_pos
+            #print(inputs.shape)
+        
+        return torch.cat(all_outputs,dim=1)
+    
+    
+class TRACK_POS_augmented(nn.Module):
+    def __init__(self,M_WINDOW,H_WINDOW,input_size=2,hidden_size=1024, output_size=None):
+        super().__init__()
+        if output_size:
+            self.output_size=output_size
+        else:
+            self.output_size=input_size
+        self.lstm_layer=nn.LSTM(input_size,hidden_size=hidden_size,batch_first=True)
+        self.decoder_dense_mot=nn.Linear(hidden_size,2)
+        self.decoder_dense_dir=nn.Linear(hidden_size,2)
+        self.output_horizon=H_WINDOW
+        self.input_window=M_WINDOW
+    
+    def forward(self,X):
+        encoder_pos_inputs,encoder_ent,decoder_pos_inputs,decoder_ent=X
+        encoder_inputs=torch.cat([encoder_pos_inputs,encoder_ent],dim=2)
+        #decoder_inputs=torch.cat([decoder_pos_inputs,decoder_ent[:,0,:].unsqueeze(dim=1)],dim=2)
+        #decoder_ent=decoder_ent[:,1,:].unsqueeze(dim=1)
+        #print(encoder_inputs.shape)
+        #print(decoder_inputs.shape)
+        #print(decoder_ent.shape)
+        #exit()
+        encoder_outputs,states=self.lstm_layer(encoder_inputs)
+        all_outputs=[]
+        inputs=decoder_pos_inputs
+        for i in range(self.output_horizon):
+            inputs=torch.cat([inputs,decoder_ent[:,i,:].unsqueeze(dim=1)],dim=2)
             decoder_output,states=self.lstm_layer(inputs,states)
             outputs_delta=self.decoder_dense_mot(decoder_output)
             outputs_delta_dir=self.decoder_dense_dir(decoder_output)
@@ -63,6 +106,13 @@ def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2, lr=0.0005, device='cpu
     optimizer=optim.AdamW(model.parameters(),lr=lr)
     criterion=MetricOrthLoss
     return model,optimizer,criterion
+
+def create_pos_only_augmented_model(M_WINDOW,H_WINDOW,input_size=3, lr=0.0005, device='cpu'):
+    model=TRACK_POS_augmented(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size).to(device)
+    optimizer=optim.AdamW(model.parameters(),lr=lr)
+    criterion=MetricOrthLoss
+    return model,optimizer,criterion
+
 
 def train_pos_only(model,train_loader,validation_loader,optimizer=None,criterion=MetricOrthLoss,epochs=100,device="cpu", path=None):
     best_val_loss=float('inf')
