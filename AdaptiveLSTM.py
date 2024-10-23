@@ -52,11 +52,14 @@ class AdaptiveLSTM(nn.Module):
         self.input_window=M_WINDOW
         self.attention_layer=AttentionLayer(hidden_size, self.input_window,entropy=entropy)
         self.entropy=entropy
+        self.layer_norm = nn.LayerNorm(hidden_size)
     
     def forward(self,X):
         encoder_pos_inputs,encoder_ent, decoder_ent=X
         entropies=torch.cat((encoder_ent,decoder_ent),dim=1)
         encoder_outputs,(hidden,cell)=self.encoder_lstm(encoder_pos_inputs)
+        encoder_outputs = self.layer_norm(encoder_outputs)
+
         #print(encoder_outputs.shape)
         #print(hidden.view(-1,self.hidden_size).shape)
         #print(torch.eq(hidden.view(-1,self.hidden_size),encoder_outputs[:,-1,:]))
@@ -71,6 +74,7 @@ class AdaptiveLSTM(nn.Module):
                 context,attention_weights=self.attention_layer(hidden[-1],outputs)
             decoder_input=context.unsqueeze(1)
             decoder_output,(hidden,cell)=self.decoder_lstm(decoder_input,(hidden,cell))
+            decoder_output = self.layer_norm(decoder_output)
             #print(decoder_output.shape)
             outputs_delta=self.fc_out(decoder_output)
             #outputs_delta_dir=self.decoder_dense_dir(decoder_output)
@@ -104,10 +108,10 @@ class CombinationLoss(nn.Module):
         #sys.exit()
         return self.alpha*mse_pos + self.beta*mse_vel
     
-def create_ALSTM_model(M_WINDOW,H_WINDOW,device='cpu',lr=1e-3):
-    model=AdaptiveLSTM(M_WINDOW,H_WINDOW).float().to(device)
-    #optimizer=optim.AdamW(model.parameters(),lr=lr, weight_decay=0.99)
+def create_ALSTM_model(M_WINDOW,H_WINDOW,device='cpu',lr=1e-3, entropy=True):
+    model=AdaptiveLSTM(M_WINDOW,H_WINDOW,entropy=entropy).float().to(device)
+    optimizer=optim.AdamW(model.parameters(),lr=lr, weight_decay=0.99)
     criterion=torch.nn.MSELoss()
-    optimizer=optim.AdamW(model.parameters(),lr=lr)
-    #criterion=CombinationLoss()
+    #optimizer=optim.AdamW(model.parameters(),lr=lr)
+    criterion=CombinationLoss()
     return model,optimizer,criterion

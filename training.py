@@ -182,6 +182,11 @@ if model_name == "ALSTM":
     MODELS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
     model,optimizer,criterion=AdaptiveLSTM.create_ALSTM_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
     eval_metrics['orth_dist']=MetricOrthLoss
+if model_name == "ALSTM-E":
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
+    model,optimizer,criterion=AdaptiveLSTM.create_ALSTM_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, entropy=False)
+    eval_metrics['orth_dist']=MetricOrthLoss
     #eval_metrics['combinatorial_loss']=criterion
 if model_name == 'TRACK_AblatSal':
     if args.use_true_saliency:
@@ -281,7 +286,7 @@ if __name__=='__main__':
 
     all_saliencies = {}
     if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360','AMH','pos_only_augmented',
-                          'ALSTM']:
+                          'ALSTM','ALSTM-E']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -291,7 +296,7 @@ if __name__=='__main__':
                 print(f"Loading {video} saliencies")
                 all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
     IEs={}
-    if model_name in  ['AMH','pos_only_augmented','ALSTM']:
+    if model_name in  ['AMH','pos_only_augmented','ALSTM','ALSTM-E']:
         _,_,IEs=fetch_entropies(root_folder,dataset_name)
 
     
@@ -316,7 +321,7 @@ if __name__=='__main__':
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
                                   all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
-        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM']:
+        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
@@ -328,8 +333,10 @@ if __name__=='__main__':
     eval_metrics={}
     if model_name in ['pos_only','pos_only_augmented']:
         eval_metrics['orth_dist']=get_orthodromic_distance_euler
+    elif model_name == 'DVMS':
+        eval_metrics['orth_dist']=DVMS.flat_top_k_orth_dist
     else:
-        eval_metrics['orth_dist']=MetricOrthLoss
+        eval_metrics['orth_dist']=get_orthodromic_distance_cartesian
     if EVALUATE_MODEL:
         test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,

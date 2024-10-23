@@ -13,11 +13,11 @@ from Utils import get_velocities
 def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
     best_val_loss=float('inf')
     device=torch.device(device)
-    if os.path.isdir(path):
+    """ if os.path.isdir(path):
         print(f"Clearing contents of the existing folder: {path}")
         shutil.rmtree(path)  # Deletes all contents in the folder
         print(f"Creating folder: {path}")
-        os.makedirs(path)
+        os.makedirs(path) """
     if not os.path.isdir(path):
         print(f"Making folder {path}")
         os.makedirs(path)
@@ -51,10 +51,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                if model_name in ['TRACK_SAL','ALSTM']:
+                if model_name in ['TRACK_SAL'
+                                  #,'ALSTM'
+                                  ]:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
-                if model_name in ['VPT360','AMH']:
+                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E']:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
                     """ magnitude=torch.norm(prediction,dim=-1)
@@ -139,10 +141,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 loss=criterion(*prediction)['loss']
             else:
                 prediction=model(ip)
-                if model_name in ['TRACK_SAL','ALSTM']:
+                if model_name in ['TRACK_SAL'
+                                  #'ALSTM'
+                                  ]:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
-                if model_name in ['VPT360','AMH']:
+                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E']:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
                     pred_vels=get_velocities(ip[0],prediction)
@@ -210,12 +214,8 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
         #print(targets.shape)
         if model_name=='DVMS':
             prediction=model.sample(ip)
-            #print(prediction.shape)
         else:
             prediction=model(ip)
-        
-        #print(prediction.shape)
-
         metric_val={}
         if metric is not None:
             for name,func in metric.items():
@@ -227,6 +227,7 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
                 #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
                 #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
                 #metric_vals[name].append(metric_val)
+                
     for name in eval_metrics:
         eval_metrics[name]=torch.cat(eval_metrics[name],dim=0).mean(dim=0).squeeze(-1)
         # Save the metrics values to a file
