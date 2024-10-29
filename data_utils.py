@@ -87,6 +87,7 @@ def get_trace_pairs(users_per_video,video_list,user_list):
 
 def var_norm(data, epsilon=1e-5):
     return np.var(data)/max(np.mean(data),epsilon)
+
 def split_videos(dataset_dir,bins=2, video_test_size=0.4):
     data_dir=os.path.join(dataset_dir,'video_data')
     videos=os.listdir(data_dir)
@@ -214,7 +215,8 @@ class PositionDataset(Dataset):
         decoder_outputs_for_batch = []
         encoder_ent_inputs_for_batch=[]
         decoder_ent_inputs_for_batch=[]
-        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E']:
+        if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360','AMH', 
+                                   'pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss']:
             encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
@@ -236,7 +238,7 @@ class PositionDataset(Dataset):
             #decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
             decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
             decoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp:tstamp+self.future_window])
-        elif self.model_name in ['pos_only_augmented']:
+        elif self.model_name in ['pos_only_augmented','pos_only_weighted_loss']:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
             encoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp-self.M_WINDOW:tstamp])
             decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
@@ -284,7 +286,7 @@ class PositionDataset(Dataset):
             return [torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), torch.tensor(decoder_sal_inputs_for_batch,dtype=torch.float32)[:, 0, :, :, 0]], torch.tensor(transform_batches_cartesian_to_normalized_eulerian(decoder_outputs_for_batch),dtype=torch.float32)[:, 0]
         elif self.model_name == 'MM18':
             return torch.tensor(encoder_sal_inputs_for_batch,dtype=torch.float32), torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
-        elif self.model_name in ['pos_only_augmented']:
+        elif self.model_name in ['pos_only_augmented','pos_only_weighted_loss']:
             return [
                 torch.tensor(transform_batches_cartesian_to_normalized_eulerian(encoder_pos_inputs_for_batch),dtype=torch.float32), 
                 torch.tensor(encoder_ent_inputs_for_batch,dtype=torch.float32),

@@ -100,11 +100,27 @@ class TRACK_POS_augmented(nn.Module):
             #print(inputs.shape)
         
         return torch.cat(all_outputs,dim=1)
-    
-def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2, lr=0.0005, device='cpu'):
+
+def weighted_MetricOrthLoss(pred_position, true_position,IE,alpha):
+    yaw_true = (true_position[:, :, 0:1] - 0.5) * 2*np.pi
+    pitch_true = (true_position[:, :, 1:2] - 0.5) * np.pi
+    # Transform it to range -pi, pi for yaw and -pi/2, pi/2 for pitch
+    yaw_pred = (pred_position[:, :, 0:1] - 0.5) * 2*np.pi
+    pitch_pred = (pred_position[:, :, 1:2] - 0.5) * np.pi
+    delta_long = torch.abs(torch.atan2(torch.sin(yaw_true - yaw_pred), torch.cos(yaw_true - yaw_pred)))
+    numerator = torch.sqrt(torch.pow(torch.cos(pitch_pred)*torch.sin(delta_long), 2.0) + torch.pow(torch.cos(pitch_true)*torch.sin(pitch_pred)-torch.sin(pitch_true)*torch.cos(pitch_pred)*torch.cos(delta_long), 2.0))
+    denominator = torch.sin(pitch_true)*torch.sin(pitch_pred)+torch.cos(pitch_true)*torch.cos(pitch_pred)*torch.cos(delta_long)
+    great_circle_distance = torch.abs(torch.atan2(numerator, denominator))
+    weighted_loss=great_circle_distance*(IE*(1+alpha))
+    return weighted_loss.mean()
+ 
+def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2, lr=0.0005, device='cpu', loss=None):
     model=TRACK_POS(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size).to(device)
     optimizer=optim.AdamW(model.parameters(),lr=lr)
-    criterion=MetricOrthLoss
+    if loss is not None:
+        criterion=weighted_MetricOrthLoss
+    else:
+        criterion=MetricOrthLoss
     return model,optimizer,criterion
 
 def create_pos_only_augmented_model(M_WINDOW,H_WINDOW,input_size=3, lr=0.0005, device='cpu'):

@@ -48,6 +48,8 @@ parser.add_argument('-video_test_chinacom', action="store", dest='video_test_chi
 parser.add_argument('-metric', action="store", dest='metric', help='Which metric to use, by default, orthodromic distance is used.')
 parser.add_argument('-K', action="store", dest='K',
                     help='(Optional) Number of predicted trajectories (default to 2).')
+parser.add_argument('-a', action="store", dest='alpha',
+                    help='(Optional) Weight for IE in adjusted loss.')
 
 
 args = parser.parse_args()
@@ -56,7 +58,12 @@ if args.dataset_name is None:
     dataset_name="Fan_NOSSDAV_17"
 else:
     dataset_name=args.dataset_name
-    
+
+if args.alpha is not None:
+    alpha=float(args.alpha)
+else:
+    alpha=0
+
 if args.m_window is None:
     M_WINDOW=5
 else:
@@ -212,7 +219,12 @@ elif model_name == 'CVPR18':
 elif model_name == 'pos_only':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Results_EncDec_eulerian' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only/Models_EncDec_eulerian' + EXP_NAME)
-    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device)
+    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device,)
+    eval_metrics['orth_dist']=get_orthodromic_distance_euler
+elif model_name == 'pos_only_weighted_loss':
+    RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_weighted/Results_EncDec_eulerian' + EXP_NAME)
+    MODELS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_weighted/Models_EncDec_eulerian' + EXP_NAME)
+    model,optimizer,criterion=TRACK_POS.create_pos_only_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, loss="IE")
     eval_metrics['orth_dist']=get_orthodromic_distance_euler
 elif model_name == 'pos_only_augmented':
     RESULTS_FOLDER = os.path.join(root_dataset_folder, 'pos_only_augment/Results_EncDec_eulerian' + EXP_NAME)
@@ -286,7 +298,7 @@ if __name__=='__main__':
 
     all_saliencies = {}
     if model_name not in ['pos_only', 'pos_only_3d_loss', 'no_motion', 'true_saliency', 'content_based_saliency','DVMS','VPT360','AMH','pos_only_augmented',
-                          'ALSTM','ALSTM-E']:
+                          'ALSTM','ALSTM-E','pos_only_weighted_loss']:
         if args.use_true_saliency:
             for video in videos:
                 print(f"Loading {video} saliencies")
@@ -296,7 +308,7 @@ if __name__=='__main__':
                 print(f"Loading {video} saliencies")
                 all_saliencies[video]=load_saliency(SALIENCY_FOLDER,video)
     IEs={}
-    if model_name in  ['AMH','pos_only_augmented','ALSTM','ALSTM-E']:
+    if model_name in  ['AMH','pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss']:
         _,_,IEs=fetch_entropies(root_folder,dataset_name)
 
     
@@ -309,7 +321,10 @@ if __name__=='__main__':
     else:
         metrics=None
     EPOCHS=500
-    model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+    if H_WINDOW==25:
+        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+    else:
+        model_save_path=os.path.join('SavedModels',f'{H_WINDOW/5}sec',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     print(model_save_path)
     #torch.autograd.set_detect_anomaly(True)
     if TRAIN_MODEL:
@@ -321,17 +336,18 @@ if __name__=='__main__':
                                   all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies,
                                   all_IEs=IEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
-        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E']:
+        if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E',
+                          'pos_only_weighted_loss']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
-                                        device=device,path=model_save_path, tolerance=20, model_name=model_name)
+                                        device=device,path=model_save_path, tolerance=20, model_name=model_name,alpha=alpha)
             print(f"Final Loss:{losses[-1]:.4f}")
             if not os.path.exists(os.path.join('Losses',dataset_name)):
                 os.makedirs(os.path.join('Losses',dataset_name))
             torch.save(losses,os.path.join('Losses',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}"))
     eval_metrics={}
-    if model_name in ['pos_only','pos_only_augmented']:
+    if model_name in ['pos_only','pos_only_augmented','pos_only_weighted_loss']:
         eval_metrics['orth_dist']=get_orthodromic_distance_euler
     elif model_name == 'DVMS':
         eval_metrics['orth_dist']=DVMS.flat_top_k_orth_dist

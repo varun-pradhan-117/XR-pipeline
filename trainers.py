@@ -10,7 +10,9 @@ import matplotlib.pyplot as plt
 from Utils import get_velocities
 
 
-def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, metric=None, tolerance=5, verbose=False, model_name=None):
+def train_model(model,train_loader,validation_loader,optimizer=None,criterion=torch.nn.MSELoss(),epochs=100,device="cpu", path=None, 
+                metric=None, tolerance=5, verbose=False, model_name=None,
+                alpha=None):
     best_val_loss=float('inf')
     device=torch.device(device)
     """ if os.path.isdir(path):
@@ -46,7 +48,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             ip=[t.squeeze(axis=1).float().to(device) for t in ip]
             targets=targets.squeeze(axis=1).float().to(device)
             #print(encoder_inputs)
-            if model_name=='DVMS':
+            if model_name=='pos_only_weighted_loss':
+                ies=ip[3]
+                ip=[ip[0],ip[2]]
+                prediction=model(ip)
+                loss=criterion(prediction,targets,ies[:,:-1],alpha)
+            elif model_name=='DVMS':
                 prediction=model(ip,targets)
                 loss=criterion(*prediction)['loss']
             else:
@@ -136,7 +143,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
             ip=[t.squeeze(axis=1).to(device) for t in ip]    
             targets=targets.squeeze(axis=1).to(device)     
             #print(encoder_inputs)
-            if model_name=='DVMS':
+            if model_name=='pos_only_weighted_loss':
+                ies=ip[3]
+                ip=[ip[0],ip[2]]
+                prediction=model(ip)
+                loss=criterion(prediction,targets,ies[:,:-1],alpha)
+            elif model_name=='DVMS':
                 prediction=model(ip,targets)
                 loss=criterion(*prediction)['loss']
             else:
@@ -196,7 +208,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
     return losses, val_losses
 
 
-def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None, metric=None, model_name=None, K=None, vid_name=None):
+def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None, metric=None, model_name=None, K=None, vid_name=None, alpha=None):
     model.eval()
     if vid_name is not None:
         path=os.path.join(path,vid_name)
@@ -212,7 +224,11 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
         ip=[t.squeeze(axis=1).to(device) for t in ip] 
         targets=targets.squeeze(axis=1).to(device)  
         #print(targets.shape)
-        if model_name=='DVMS':
+        if model_name=='pos_only_weighted_loss':
+                ies=ip[3]
+                ip=[ip[0],ip[2]]
+                prediction=model(ip)      
+        elif model_name=='DVMS':
             prediction=model.sample(ip)
         else:
             prediction=model(ip)
@@ -227,7 +243,6 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
                 #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
                 #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
                 #metric_vals[name].append(metric_val)
-                
     for name in eval_metrics:
         eval_metrics[name]=torch.cat(eval_metrics[name],dim=0).mean(dim=0).squeeze(-1)
         # Save the metrics values to a file
@@ -254,7 +269,7 @@ def test_model(model, validation_loader, criterion=torch.nn.MSELoss(), device='c
     
     
 def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device='cpu',path=None,
-                  metric=None, model_name=None, K=None, vid_name=None, user_name=None):
+                  metric=None, model_name=None, K=None, vid_name=None, user_name=None, alpha=None):
     model.eval()
     if vid_name is not None:
         path=os.path.join(path,vid_name,user_name)
@@ -272,7 +287,11 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
         ip=[t.squeeze(axis=1).to(device) for t in ip] 
         targets=targets.squeeze(axis=1).to(device)  
         #print(targets.shape)
-        if model_name=='DVMS':
+        if model_name=='pos_only_weighted_loss':
+            ies=ip[3]
+            ip=[ip[0],ip[2]]
+            prediction=model(ip)
+        elif model_name=='DVMS':
             prediction=model.sample(ip)
             #print(prediction.shape)
         else:
