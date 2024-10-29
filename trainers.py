@@ -199,7 +199,12 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                 'epoch':'epoch'
             }
             save_path=os.path.join(path,f'Epoch_{epoch}.pth')
-
+            for filename in os.listdir(path):
+                if filename.startswith('Epoch_') and filename.endswith('.pth'):
+                    file_path = os.path.join(path, filename)
+                    # Delete all previous checkpoints
+                    os.remove(file_path)
+                    print(f"Deleted previous checkpoint: {file_path}")
             torch.save(checkpoint,save_path)
             last_saved=0
             print(f"Model saved at {epoch+1} with validation loss: {epoch_val_loss:.4f}")
