@@ -255,7 +255,7 @@ if __name__=='__main__':
     users = get_user_ids(VIDEO_DATA_FOLDER)
     users_per_video = get_users_per_video(VIDEO_DATA_FOLDER)
 
-    if dataset_name in ["Fan_NOSSDAV_17","Jin_22", 'PAMI18']:
+    if dataset_name in ["Fan_NOSSDAV_17","Jin_22", 'PAMI18','MMSys18']:
         split_path=os.path.join(dataset_name,"splits")
         if os.path.exists(os.path.join(split_path,'train_set')):
             train_traces=load_dict_from_csv(os.path.join(split_path,'train_set'),columns=['user','video'])
@@ -270,11 +270,20 @@ if __name__=='__main__':
                                                                                                                     bins=2,
                                                                                                                     video_test_size=PERC_VIDEOS_TEST,
                                                                                                                     user_test_size=PERC_USERS_TEST)
-            os.makedirs(os.path.join(split_path))
+            #os.makedirs(os.path.join(split_path))
             store_list_as_csv(os.path.join(split_path,'train_set'),['user','video'],train_traces)
             store_list_as_csv(os.path.join(split_path,'test_set'),['user','video'],test_traces)
             store_list_as_csv(os.path.join(split_path,'user_test_set'),['user','video'],user_test_traces)
             store_list_as_csv(os.path.join(split_path,'video_test_set'),['user','video'],video_test_traces)
+            with open(os.path.join(split_path,'test_vids'), mode='w', newline='') as file:
+                writer = csv.writer(file)
+                
+                # Write the header
+                writer.writerow(['video'])
+                
+                # Write each item in the data list as a row
+                for item in test_vids:
+                    writer.writerow([item])
         partitions=partition_in_train_and_test(VIDEO_DATA_FOLDER,
                                                init_window=INIT_WINDOW,
                                                end_window=END_WINDOW,

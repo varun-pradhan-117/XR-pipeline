@@ -16,7 +16,7 @@ OUTPUT_FOLDER = './David_MMSys_18/sampled_dataset'
 
 OUTPUT_FOLDER_ORIGINAL_XYZ = './David_MMSys_18/original_dataset_xyz'
 
-drive_folder='D:/MMSys18'
+drive_folder='/media/Blue2TB1/MMSys18'
 VIDEO_FOLDER=os.path.join(drive_folder,'Videos')
 VIDEO_DATA_FOLDER=os.path.join(drive_folder,'video_data')
 OUTPUT_TRUE_SALIENCY_FOLDER = os.path.join(drive_folder,'true_saliency')
