@@ -311,7 +311,6 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
                     metric_val=func(prediction.detach(),targets,k=K)
                 else:
                     metric_val=func(prediction.detach(),targets).squeeze(-1)
-                
                 eval_metrics[name].append(metric_val)
                 #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
                 #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
@@ -325,7 +324,7 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
             # Save the metrics values to a file
             values_save_path = os.path.join(path, f'{name}_{time}_values.npy')
             np.save(values_save_path, specific_values)
-            print(f"Saved metric values for {name} and timestep {time} at {values_save_path}")
+            #print(f"Saved metric values for {name} and timestep {time} at {values_save_path}")
 
             # Plot the metric and save the figure
             """ timestamps = (np.arange(1, 26) / 5)  # [0.2, 0.4, ..., 5.0] assuming 5 fps

@@ -52,6 +52,8 @@ parser.add_argument('-a', action="store", dest='alpha',
                     help='(Optional) Weight for IE in adjusted loss.')
 parser.add_argument('-mode', action="store", dest='mode',
                     help='(Optional) SE or AE.')
+parser.add_argument('-params', action="store_true", dest='params',
+                    help='Print number of model parameters')
 
 
 
@@ -62,6 +64,10 @@ if args.dataset_name is None:
 else:
     dataset_name=args.dataset_name
 
+if args.params:
+    param_flag=True
+else:
+    param_flag=False
 if args.alpha is not None:
     alpha=float(args.alpha)
 else:
@@ -258,7 +264,9 @@ elif model_name == 'MM18':
 #print(model)
 #summary(model,input_size=(128,1,5,2))
 if __name__=='__main__':
-
+    if param_flag:
+        print(f"{model_name} has {sum(p.numel() for p in model.parameters() if p.requires_grad)} parameters")
+        exit(0)
     videos = get_video_ids(VIDEO_DATA_FOLDER)
     users = get_user_ids(VIDEO_DATA_FOLDER)
     users_per_video = get_users_per_video(VIDEO_DATA_FOLDER)
@@ -328,9 +336,6 @@ if __name__=='__main__':
     SEs={}
     if model_name in  ['AMH','pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss']:
         SEs,_,IEs=fetch_entropies(root_folder,dataset_name)
-    print(SEs['sport'].shape)
-    print(IEs['sport'])
-    exit()
     
     
 
@@ -465,10 +470,11 @@ if __name__=='__main__':
         for video in test_vids:
             user_list=[trace[0] for trace in test_traces if trace[1]==video]
             for user in user_list:
+                user=str(user)
                 test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                       all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video, user_name=user,
                                       all_IEs=IEs, all_SEs=SEs)
-                test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=0)   
+                test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)   
                 test_full_vid(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                         metric=eval_metrics,path=plot_path, model_name=model_name, K=K, vid_name=video, user_name=user)
             print(f"Saved files for {video} with {len(user_list)} users.")
