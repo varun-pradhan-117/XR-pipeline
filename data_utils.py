@@ -182,7 +182,7 @@ def save_unique_videos_to_csv(unique_videos, output_csv_path):
         
 class PositionDataset(Dataset):
     def __init__(self,list_IDs,future_window,M_WINDOW, model_name, all_traces,all_saliencies=None,all_IEs=None,
-                 all_headmaps=None, video_name=None, user_name=None):
+                 all_headmaps=None, video_name=None, user_name=None, all_SEs=None):
         self.list_IDs=list_IDs
         self.all_saliencies=all_saliencies
         self.all_traces=all_traces
@@ -192,6 +192,7 @@ class PositionDataset(Dataset):
         self.future_window=future_window
         self.user_name=user_name
         self.all_IEs=all_IEs
+        self.all_SEs=all_SEs
         # Filter list_IDs by video_name if specified
         if video_name is not None:
             self.list_IDs = [ID for ID in self.list_IDs if ID['video'] == video_name]
@@ -238,11 +239,23 @@ class PositionDataset(Dataset):
             #decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
             decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
             decoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp:tstamp+self.future_window])
+        elif self.model_name in ['ALSTM-SE']:
+            encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
+            encoder_ent_inputs_for_batch.append(self.all_SEs[video][tstamp-self.M_WINDOW:tstamp])
+            #decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
+            decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+self.future_window])
+            decoder_ent_inputs_for_batch.append(self.all_SEs[video][tstamp:tstamp+self.future_window])
         elif self.model_name in ['pos_only_augmented','pos_only_weighted_loss']:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
             encoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp-self.M_WINDOW:tstamp])
             decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
             decoder_ent_inputs_for_batch.append(self.all_IEs[video][user][tstamp:tstamp+self.future_window+1])
+            decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp+1:tstamp+self.future_window+1])
+        elif self.model_name in ['pos_only_augmented-SE','pos_only_weighted_loss-SE']:
+            encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])
+            encoder_ent_inputs_for_batch.append(self.all_SEs[video][tstamp-self.M_WINDOW:tstamp])
+            decoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp:tstamp+1])
+            decoder_ent_inputs_for_batch.append(self.all_SEs[video][tstamp:tstamp+self.future_window+1])
             decoder_outputs_for_batch.append(self.all_traces[video][user][tstamp+1:tstamp+self.future_window+1])
         else:
             encoder_pos_inputs_for_batch.append(self.all_traces[video][user][tstamp-self.M_WINDOW:tstamp])

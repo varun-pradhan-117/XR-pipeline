@@ -157,7 +157,7 @@ class CombinationLoss(nn.Module):
         return self.alpha*mse_pos + self.beta*mse_vel
     
 def create_AMH_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=2e-7,hidden_size=512,num_heads=8,num_layers=1,max_len=1000,
-                     full_vec=False,dropout=0.1, device='cpu'):
+                     full_vec=False,dropout=0.1, device='cpu', mode=None):
     model=AMH(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_dim=input_size_pos,hidden_size=hidden_size,
                  num_heads=num_heads,num_layers=num_layers,max_len=max_len, full_vec=full_vec,
                  dropout=dropout).to(device)

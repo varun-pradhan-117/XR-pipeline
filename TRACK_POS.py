@@ -123,7 +123,7 @@ def create_pos_only_model(M_WINDOW,H_WINDOW,input_size=2, lr=0.0005, device='cpu
         criterion=MetricOrthLoss
     return model,optimizer,criterion
 
-def create_pos_only_augmented_model(M_WINDOW,H_WINDOW,input_size=3, lr=0.0005, device='cpu'):
+def create_pos_only_augmented_model(M_WINDOW,H_WINDOW,input_size=3, lr=0.0005, device='cpu',mode=None):
     model=TRACK_POS_augmented(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_size=input_size).to(device)
     optimizer=optim.AdamW(model.parameters(),lr=lr)
     criterion=MetricOrthLoss
