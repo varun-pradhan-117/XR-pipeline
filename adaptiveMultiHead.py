@@ -34,7 +34,7 @@ class AdaptiveMultiHeadAttention(nn.Module):
         self.W_v=nn.Linear(d_model,d_model)
         self.W_o=nn.Linear(d_model,d_model)
         if M_WINDOW:
-            self.W_e=nn.Parameter(torch.empty(M_WINDOW).normal_(mean=0,std=0.01))
+            self.W_e=nn.Parameter(torch.empty(M_WINDOW).normal_(mean=1,std=0.01))
             
         else:
             self.W_e=nn.Parameter(torch.randn(1))
@@ -156,7 +156,7 @@ class CombinationLoss(nn.Module):
         #sys.exit()
         return self.alpha*mse_pos + self.beta*mse_vel
     
-def create_AMH_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=2e-7,hidden_size=512,num_heads=8,num_layers=1,max_len=1000,
+def create_AMH_model(M_WINDOW,H_WINDOW,input_size_pos=3, lr=0.0001,hidden_size=512,num_heads=8,num_layers=1,max_len=1000,
                      full_vec=False,dropout=0.1, device='cpu', mode=None):
     model=AMH(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,input_dim=input_size_pos,hidden_size=hidden_size,
                  num_heads=num_heads,num_layers=num_layers,max_len=max_len, full_vec=full_vec,

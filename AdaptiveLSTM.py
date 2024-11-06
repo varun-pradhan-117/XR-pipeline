@@ -19,7 +19,7 @@ class AttentionLayer(nn.Module):
         self.W_K=nn.Linear(hidden_size,hidden_size)
         self.W_Q=nn.Linear(hidden_size,hidden_size)
         self.W_V = nn.Linear(hidden_size,hidden_size)
-        self.W_e=nn.Parameter(torch.empty(M_WINDOW).normal_(mean=0,std=0.01))
+        self.W_e=nn.Parameter(torch.empty(M_WINDOW).normal_(mean=1,std=0.01))
         self.entropy=entropy
         
     def forward(self,last_state,all_states, IEs=None):
@@ -110,7 +110,7 @@ class CombinationLoss(nn.Module):
     
 def create_ALSTM_model(M_WINDOW,H_WINDOW,device='cpu',lr=1e-3, entropy=True, mode=None):
     model=AdaptiveLSTM(M_WINDOW,H_WINDOW,entropy=entropy).float().to(device)
-    optimizer=optim.AdamW(model.parameters(),lr=0.0005)
+    optimizer=optim.AdamW(model.parameters(),lr=lr,weight_decay=0.01)
     criterion=torch.nn.MSELoss()
     #optimizer=optim.AdamW(model.parameters(),lr=lr)
     criterion=CombinationLoss()
