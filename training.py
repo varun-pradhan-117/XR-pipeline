@@ -8,7 +8,7 @@ import sys
 import csv
 import random
 import argparse
-
+from itertools import zip_longest
 from DatasetHelper import partition_in_train_and_test, get_video_ids, get_user_ids, get_users_per_video, read_sampled_unit_vectors_by_users, load_true_saliency,load_saliency
 #from SampledDataset import read_sampled_positions_for_trace, split_list_by_percentage, partition_in_train_and_test_without_any_intersection, partition_in_train_and_test_without_video_intersection
 from Utils import get_orthodromic_distance_cartesian,get_orthodromic_distance_euler,cartesian_to_eulerian, eulerian_to_cartesian, get_max_sal_pos,load_dict_from_csv,all_metrics, store_list_as_csv, MetricOrthLoss, OrthDist
@@ -52,6 +52,8 @@ parser.add_argument('-a', action="store", dest='alpha',
                     help='(Optional) Weight for IE in adjusted loss.')
 parser.add_argument('-mode', action="store", dest='mode',
                     help='(Optional) SE or AE.')
+parser.add_argument('-norm', action="store_true", dest='norm',
+                    help='Normalize IE.')
 parser.add_argument('-params', action="store_true", dest='params',
                     help='Print number of model parameters')
 
@@ -112,7 +114,10 @@ if args.K is not None:
     K = int(args.K)
 else:
     K=2
-
+if args.norm is not None:
+    norm=args.norm
+else:
+    norm=False
 
 # Fixed parameters
 EPOCHS=500
@@ -260,7 +265,39 @@ elif model_name == 'MM18':
         RESULTS_FOLDER = os.path.join(root_dataset_folder, 'MM18/Results_Seq2One_2DNormalized_TrueSal' + EXP_NAME)
         MODELS_FOLDER = os.path.join(root_dataset_folder, 'MM18/Models_Seq2One_2DNormalized_TrueSal' + EXP_NAME)
 
+def normalize_entropies_across_dataset(IEs):
+    """
+    Normalize information entropies (IEs) across the entire dataset.
 
+    Parameters:
+    - IEs (dict): A dictionary of dictionaries where the first key is video names 
+                  and the second key is usernames.
+
+    Returns:
+    - normalized_IEs (dict): A dictionary of dictionaries with normalized IEs.
+    """
+    
+    # Flatten the IEs to get all values
+    all_values = []
+    for video, user_data in IEs.items():
+        for user, values in user_data.items():
+            all_values.extend(values) 
+
+    all_values = np.array(all_values)
+
+    # Calculate min and max
+    min_val = np.min(all_values)
+    max_val = np.max(all_values)
+
+    # Normalize values using min-max scaling
+    normalized_IEs = {}
+    for video, user_data in IEs.items():
+        normalized_IEs[video] = {}
+        for user, value in user_data.items():
+            normalized_value = 2*((value - min_val) / (max_val - min_val)) if max_val != min_val else 0
+            normalized_IEs[video][user] = normalized_value
+
+    return normalized_IEs
 #print(model)
 #summary(model,input_size=(128,1,5,2))
 if __name__=='__main__':
@@ -337,7 +374,9 @@ if __name__=='__main__':
     if model_name in  ['AMH','pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss']:
         SEs,_,IEs=fetch_entropies(root_folder,dataset_name)
     
-    
+    if norm:
+        IEs=normalize_entropies_across_dataset(IEs)
+        
 
     if model_name in ['TRACK', 'DVMS']:
         metrics = {"orth_dist": MetricOrthLoss}
@@ -348,8 +387,10 @@ if __name__=='__main__':
     EPOCHS=500
     if mode=='SE':
         model_name=model_name+'-SE'
-    if H_WINDOW==25:
-        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+    if norm:
+        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
+    elif H_WINDOW==25:
+        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
     else:
         model_save_path=os.path.join('SavedModels',f'{H_WINDOW/5}sec',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     print(model_save_path)
@@ -394,7 +435,10 @@ if __name__=='__main__':
         best_model=os.path.join(model_save_path,f'Epoch_{latest}.pth')
         model_data=torch.load(best_model,weights_only=False)
         model.load_state_dict(model_data['model_state_dict'])
-        plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        if norm:
+            plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
+        else:
+            plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
         test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                    metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
     if EVALUATE_OLD_VIDEOS:
@@ -445,7 +489,7 @@ if __name__=='__main__':
         model.load_state_dict(model_data['model_state_dict'])
         test_vids=[vid[0] for vid in test_vids]
         print(*test_vids)
-        plot_path=os.path.join("Test_vid_plots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        plot_path=os.path.join("Test_vid_plots",dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
             test_data=PositionDataset(partitions['test'],future_window=H_WINDOW,M_WINDOW=M_WINDOW,
                                       all_traces=all_traces,model_name=model_name,all_saliencies=all_saliencies, video_name=video,
@@ -466,7 +510,10 @@ if __name__=='__main__':
         model.load_state_dict(model_data['model_state_dict'])
         test_vids=[vid[0] for vid in test_vids]
         print(*test_vids)
-        plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
+        if norm:
+            plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
+        else:
+            plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
             user_list=[trace[0] for trace in test_traces if trace[1]==video]
             for user in user_list:

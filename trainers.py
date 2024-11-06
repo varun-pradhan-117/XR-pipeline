@@ -288,6 +288,7 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
     if metric is not None:
         for name,func in metric.items():
             eval_metrics[name]=[]
+    all_predictions = []
     for ip, targets in validation_loader:
         ip=[t.squeeze(axis=1).to(device) for t in ip] 
         targets=targets.squeeze(axis=1).to(device)  
@@ -301,7 +302,7 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
             #print(prediction.shape)
         else:
             prediction=model(ip)
-        
+        all_predictions.append(prediction.detach().cpu().numpy())
         #print(prediction.shape)
 
         metric_val={}
@@ -312,9 +313,14 @@ def test_full_vid(model, validation_loader, criterion=torch.nn.MSELoss(), device
                 else:
                     metric_val=func(prediction.detach(),targets).squeeze(-1)
                 eval_metrics[name].append(metric_val)
+                
                 #avg_metrics=func(prediction.detach(),targets).mean(dim=0).squeeze(-1)
                 #metric_val[name]=torch.mean(func(prediction.detach(),targets)).item()
                 #metric_vals[name].append(metric_val)
+    all_predictions=np.concatenate(all_predictions,axis=0)  
+    pred_paths=os.path.join(path,f'predictions.npy')
+    np.save(pred_paths,all_predictions)   
+    
     for name in eval_metrics:
         all_metrics=torch.cat(eval_metrics[name],dim=0)
         #print(eval_metrics[name].shape)

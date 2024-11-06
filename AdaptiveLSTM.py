@@ -110,7 +110,7 @@ class CombinationLoss(nn.Module):
     
 def create_ALSTM_model(M_WINDOW,H_WINDOW,device='cpu',lr=1e-3, entropy=True, mode=None):
     model=AdaptiveLSTM(M_WINDOW,H_WINDOW,entropy=entropy).float().to(device)
-    optimizer=optim.AdamW(model.parameters(),lr=lr, weight_decay=0.99)
+    optimizer=optim.AdamW(model.parameters(),lr=0.0005)
     criterion=torch.nn.MSELoss()
     #optimizer=optim.AdamW(model.parameters(),lr=lr)
     criterion=CombinationLoss()
