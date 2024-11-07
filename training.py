@@ -390,7 +390,7 @@ if __name__=='__main__':
     if norm:
         model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
     elif H_WINDOW==25:
-        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
+        model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     else:
         model_save_path=os.path.join('SavedModels',f'{H_WINDOW/5}sec',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
     print(model_save_path)
@@ -513,7 +513,7 @@ if __name__=='__main__':
         if norm:
             plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
         else:
-            plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
+            plot_path=os.path.join("Plots",'Full_video_plots',dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         for video in test_vids:
             user_list=[trace[0] for trace in test_traces if trace[1]==video]
             for user in user_list:
