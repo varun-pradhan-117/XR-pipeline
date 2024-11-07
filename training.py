@@ -438,7 +438,7 @@ if __name__=='__main__':
         if norm:
             plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
         else:
-            plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_lr_{EXP_NAME}_Epoch{EPOCHS}")
+            plot_path=os.path.join("TestPlots",dataset_name,f"{model_name}_{EXP_NAME}_Epoch{EPOCHS}")
         test_model(model=model,validation_loader=test_loader,criterion=criterion,device=device,
                    metric=eval_metrics,path=plot_path, model_name=model_name, K=K)
     if EVALUATE_OLD_VIDEOS:
