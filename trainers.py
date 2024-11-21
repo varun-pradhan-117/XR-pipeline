@@ -44,7 +44,6 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
         metric_val={}
         for idx,(ip,targets) in enumerate(train_loader):
             optimizer.zero_grad()
-            #print(ip)
             ip=[t.squeeze(axis=1).float().to(device) for t in ip]
             targets=targets.squeeze(axis=1).float().to(device)
             #print(encoder_inputs)
@@ -63,7 +62,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                                   ]:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
-                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E']:
+                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E','ALSTM-SE']:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
                     """ magnitude=torch.norm(prediction,dim=-1)
@@ -158,7 +157,7 @@ def train_model(model,train_loader,validation_loader,optimizer=None,criterion=to
                                   ]:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
-                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E']:
+                if model_name in ['VPT360','AMH','ALSTM','ALSTM-E','ALSTM-SE']:
                     norm = torch.norm(prediction, dim=-1, keepdim=True) + 1e-8  # Avoid division by zero
                     prediction = prediction / norm 
                     pred_vels=get_velocities(ip[0],prediction)

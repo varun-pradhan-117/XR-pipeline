@@ -14,8 +14,9 @@ def toPosition(values):
 
 
 class AttentionLayer(nn.Module):
-    def __init__(self,hidden_size,M_WINDOW, entropy=True):
+    def __init__(self,hidden_size,M_WINDOW, entropy=True, mode='IE'):
         super().__init__()
+        self.mode=mode
         self.W_K=nn.Linear(hidden_size,hidden_size)
         self.W_Q=nn.Linear(hidden_size,hidden_size)
         self.W_V = nn.Linear(hidden_size,hidden_size)
@@ -34,14 +35,17 @@ class AttentionLayer(nn.Module):
         #print(all_states.shape)
         #print(self.W_e.shape)
         if self.entropy:
-            M_t=torch.exp(self.W_e.unsqueeze(0)*IEs.squeeze(2)).unsqueeze(1)
+            if self.mode=='SE':
+                M_t=torch.tanh(self.W_e.unsqueeze(0)*IEs.squeeze(2)).unsqueeze(1)
+            else:
+                M_t=torch.exp(-self.W_e.unsqueeze(0)*IEs.squeeze(2)).unsqueeze(1)
             scores=scores*M_t
         attention_weights=F.softmax(scores,dim=-1)
         context=torch.bmm(attention_weights,V)
         return context.squeeze(1),attention_weights.squeeze(1)
 
 class AdaptiveLSTM(nn.Module):
-    def __init__(self,M_WINDOW,H_WINDOW,input_size=3,hidden_size=1024, entropy=True):
+    def __init__(self,M_WINDOW,H_WINDOW,input_size=3,hidden_size=1024, entropy=True, mode='IE'):
         super().__init__()
         self.hidden_size=hidden_size
         self.encoder_lstm=nn.LSTM(input_size,hidden_size=hidden_size,batch_first=True)
@@ -50,7 +54,7 @@ class AdaptiveLSTM(nn.Module):
         #self.decoder_dense_dir=nn.Linear(hidden_size,2)
         self.output_horizon=H_WINDOW
         self.input_window=M_WINDOW
-        self.attention_layer=AttentionLayer(hidden_size, self.input_window,entropy=entropy)
+        self.attention_layer=AttentionLayer(hidden_size, self.input_window,entropy=entropy, mode=mode)
         self.entropy=entropy
         self.layer_norm = nn.LayerNorm(hidden_size)
     
@@ -109,7 +113,7 @@ class CombinationLoss(nn.Module):
         return self.alpha*mse_pos + self.beta*mse_vel
     
 def create_ALSTM_model(M_WINDOW,H_WINDOW,device='cpu',lr=1e-3, entropy=True, mode=None):
-    model=AdaptiveLSTM(M_WINDOW,H_WINDOW,entropy=entropy).float().to(device)
+    model=AdaptiveLSTM(M_WINDOW,H_WINDOW,entropy=entropy,mode=mode).float().to(device)
     optimizer=optim.AdamW(model.parameters(),lr=lr,weight_decay=0.01)
     criterion=torch.nn.MSELoss()
     #optimizer=optim.AdamW(model.parameters(),lr=lr)

@@ -217,7 +217,7 @@ class PositionDataset(Dataset):
         encoder_ent_inputs_for_batch=[]
         decoder_ent_inputs_for_batch=[]
         if self.model_name not in ['pos_only', 'pos_only_3d_loss', 'MM18','DVMS','VPT360','AMH', 
-                                   'pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss']:
+                                   'pos_only_augmented','ALSTM','ALSTM-E','pos_only_weighted_loss', 'ALSTM-SE']:
             encoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp-self.M_WINDOW+1:tstamp+1])
             decoder_sal_inputs_for_batch.append(self.all_saliencies[video][tstamp+1:tstamp+self.future_window+1])
         if self.model_name == 'CVPR18_orig':
@@ -279,7 +279,7 @@ class PositionDataset(Dataset):
         elif self.model_name in ['AMH']:
             return [torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32),
                     torch.tensor(encoder_ent_inputs_for_batch,dtype=torch.float32)], torch.tensor(decoder_outputs_for_batch,dtype=torch.float32)
-        elif self.model_name in ['ALSTM','ALSTM-E']:
+        elif self.model_name in ['ALSTM','ALSTM-E','ALSTM-SE']:
             return [
                 torch.tensor(encoder_pos_inputs_for_batch,dtype=torch.float32),
                 torch.tensor(encoder_ent_inputs_for_batch,dtype=torch.float32),

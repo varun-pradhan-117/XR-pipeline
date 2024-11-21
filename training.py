@@ -75,7 +75,7 @@ if args.alpha is not None:
 else:
     alpha=0
     
-if args.mode is not None:
+if args.mode=='SE':
     mode='SE'
 else:
     mode='IE'
@@ -211,7 +211,7 @@ if model_name == "ALSTM":
 if model_name == "ALSTM-E":
     RESULTS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Results_K{K}_EncDec_3DCoord' + EXP_NAME)
     MODELS_FOLDER = os.path.join(root_dataset_folder, f'ALSTM/Models_K{K}_EncDec_3DCoord' + EXP_NAME)
-    model,optimizer,criterion=AdaptiveLSTM.create_ALSTM_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, entropy=False)
+    model,optimizer,criterion=AdaptiveLSTM.create_ALSTM_model(M_WINDOW=M_WINDOW,H_WINDOW=H_WINDOW,device=device, entropy=False, mode=mode)
     eval_metrics['orth_dist']=MetricOrthLoss
     #eval_metrics['combinatorial_loss']=criterion
 if model_name == 'TRACK_AblatSal':
@@ -385,8 +385,12 @@ if __name__=='__main__':
     else:
         metrics=None
     EPOCHS=500
+    print(mode)
     if mode=='SE':
-        model_name=model_name+'-SE'
+        if model_name == 'ALSTM-E':
+            model_name='ALSTM-SE'
+        else:
+            model_name=model_name+'-SE'
     if norm:
         model_save_path=os.path.join('SavedModels',dataset_name,f"{model_name}_norm_{EXP_NAME}_Epoch{EPOCHS}")
     elif H_WINDOW==25:
@@ -405,7 +409,7 @@ if __name__=='__main__':
                                   all_IEs=IEs, all_SEs=SEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
         if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E',
-                          'pos_only_weighted_loss']:
+                          'pos_only_weighted_loss','ALSTM-SE']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
