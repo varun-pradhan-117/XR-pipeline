@@ -79,6 +79,8 @@ class TRACK_POS_augmented(nn.Module):
     
     def forward(self,X):
         encoder_pos_inputs,encoder_ent,decoder_pos_inputs,decoder_ent=X
+        encoder_ent=encoder_ent.unsqueeze(2)
+        decoder_ent=decoder_ent.unsqueeze(2)
         encoder_inputs=torch.cat([encoder_pos_inputs,encoder_ent],dim=2)
         #decoder_inputs=torch.cat([decoder_pos_inputs,decoder_ent[:,0,:].unsqueeze(dim=1)],dim=2)
         #decoder_ent=decoder_ent[:,1,:].unsqueeze(dim=1)

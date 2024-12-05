@@ -385,7 +385,7 @@ if __name__=='__main__':
     else:
         metrics=None
     EPOCHS=500
-    print(mode)
+    
     if mode=='SE':
         if model_name == 'ALSTM-E':
             model_name='ALSTM-SE'
@@ -409,7 +409,7 @@ if __name__=='__main__':
                                   all_IEs=IEs, all_SEs=SEs)
         test_loader=DataLoader(test_data,batch_size=BATCH_SIZE,shuffle=False, pin_memory=True,num_workers=4)
         if model_name in ['pos_only','DVMS','TRACK','VPT360','AMH', 'pos_only_augmented','ALSTM','ALSTM-E',
-                          'pos_only_weighted_loss','ALSTM-SE']:
+                          'pos_only_weighted_loss','ALSTM-SE', 'pos_only_augmented-SE']:
             losses,val_losses=train_model(model=model,train_loader=train_loader,
                                           validation_loader=test_loader,
                                           optimizer=optimizer,criterion=criterion, metric=metrics,epochs=EPOCHS,
